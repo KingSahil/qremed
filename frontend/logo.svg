@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%" fill="none">
+  <!-- Soft quantum wave offset layer (light blue echo) -->
+  <g stroke="#93c5fd" stroke-width="3.5" opacity="0.55" transform="translate(3, -2)">
+    <ellipse cx="50" cy="50" rx="41" ry="16" />
+    <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(60 50 50)" />
+    <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(-60 50 50)" />
+    <circle cx="50" cy="50" r="6.5" fill="#bfdbfe" />
+  </g>
+
+  <!-- Main Orbit 1: Horizontal (Dark Slate) -->
+  <ellipse cx="50" cy="50" rx="41" ry="16" stroke="#1e293b" stroke-width="3.8" stroke-linecap="round" />
+  <circle cx="15" cy="54" r="5.5" fill="#ffffff" stroke="#1e293b" stroke-width="3.2" />
+
+  <!-- Main Orbit 2: Tilted 60 deg (Dark Slate) -->
+  <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(60 50 50)" stroke="#1e293b" stroke-width="3.8" stroke-linecap="round" />
+  <circle cx="71" cy="79" r="5.5" fill="#ffffff" stroke="#1e293b" stroke-width="3.2" />
+
+  <!-- Main Orbit 3: Tilted -60 deg (Vibrant Red/Coral Accent) -->
+  <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(-60 50 50)" stroke="#ef4444" stroke-width="3.8" stroke-linecap="round" />
+  <circle cx="54" cy="18" r="5.5" fill="#ffffff" stroke="#ef4444" stroke-width="3.2" />
+
+  <!-- Central Nucleus -->
+  <circle cx="50" cy="50" r="6.5" fill="#ffffff" stroke="#ef4444" stroke-width="3.8" />
+</svg>
