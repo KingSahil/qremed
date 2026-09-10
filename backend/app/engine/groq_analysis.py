@@ -69,28 +69,38 @@ def run_ai_analysis(structured_results: dict, api_key: str | None = None, model:
                      "and is never stored or hard-coded).",
         }
 
-    selected_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "llama-3.3-70b-versatile"
+    primary_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "qwen/qwen3.8-27b"
+    fallback_models = [primary_model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    # De-duplicate while preserving order
+    models_to_try = list(dict.fromkeys(fallback_models))
 
     try:
         from groq import Groq
     except ImportError:
         return {"available": False, "error": "The 'groq' Python package is not installed on the backend."}
 
-    try:
-        client = Groq(api_key=key)
-        response = client.chat.completions.create(
-            model=selected_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Here are the structured Q-REMED experiment results:\n\n{build_context(structured_results)}"},
-            ],
-            temperature=0.2,
-            max_tokens=2000,
-        )
-        text = response.choices[0].message.content
-        return {"available": True, "model": selected_model, "analysis": text, "label": "AI-Assisted Analysis powered by Groq"}
-    except Exception as e:
-        return {"available": False, "error": f"Groq request failed: {e}"}
+    last_error = None
+    for mdl in models_to_try:
+        try:
+            client = Groq(api_key=key)
+            response = client.chat.completions.create(
+                model=mdl,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Here are the structured Q-REMED experiment results:\n\n{build_context(structured_results)}"},
+                ],
+                temperature=0.2,
+                max_tokens=2048,
+            )
+            text = response.choices[0].message.content
+            return {"available": True, "model": mdl, "analysis": text, "label": f"AI-Assisted Analysis powered by Groq ({mdl})"}
+        except Exception as e:
+            last_error = e
+            if "model_not_found" in str(e) or "does not exist" in str(e):
+                continue
+            return {"available": False, "error": f"Groq request failed: {e}"}
+
+    return {"available": False, "error": f"Groq request failed with all attempted models: {last_error}"}
 
 
 CHAT_SYSTEM_PROMPT = """You are an expert AI Research Assistant for Q-REMED, a hybrid quantum-classical machine learning research platform.
@@ -123,42 +133,50 @@ def run_ai_chat(
                      "or provide one in the AI Chat panel.",
         }
 
-    selected_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "llama-3.3-70b-versatile"
+    primary_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "qwen/qwen3.8-27b"
+    fallback_models = [primary_model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    models_to_try = list(dict.fromkeys(fallback_models))
 
     try:
         from groq import Groq
     except ImportError:
         return {"available": False, "error": "The 'groq' Python package is not installed on the backend."}
 
-    try:
-        client = Groq(api_key=key)
-
-        # Build message history with experiment context in system prompt
-        groq_messages = [
-            {
-                "role": "system",
-                "content": f"{CHAT_SYSTEM_PROMPT}\n\n=== MEASURED EXPERIMENT CONTEXT (JSON) ===\n{build_context(structured_results)}",
-            }
-        ]
-
-        # Add user & assistant chat history
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if role in ("user", "assistant") and content:
-                groq_messages.append({"role": role, "content": str(content)})
-
-        response = client.chat.completions.create(
-            model=selected_model,
-            messages=groq_messages,
-            temperature=0.3,
-            max_tokens=2048,
-        )
-        reply_content = response.choices[0].message.content
-        return {
-            "available": True,
-            "model": selected_model,
-            "message": {"role": "assistant", "content": reply_content},
+    # Build message history with experiment context in system prompt
+    groq_messages = [
+        {
+            "role": "system",
+            "content": f"{CHAT_SYSTEM_PROMPT}\n\n=== MEASURED EXPERIMENT CONTEXT (JSON) ===\n{build_context(structured_results)}",
         }
-    except Exception as e:
-        return {"available": False, "error": f"Groq chat request failed: {e}"}
+    ]
+
+    # Add user & assistant chat history
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role in ("user", "assistant") and content:
+            groq_messages.append({"role": role, "content": str(content)})
+
+    last_error = None
+    for mdl in models_to_try:
+        try:
+            client = Groq(api_key=key)
+            response = client.chat.completions.create(
+                model=mdl,
+                messages=groq_messages,
+                temperature=0.3,
+                max_tokens=2048,
+            )
+            reply_content = response.choices[0].message.content
+            return {
+                "available": True,
+                "model": mdl,
+                "message": {"role": "assistant", "content": reply_content},
+            }
+        except Exception as e:
+            last_error = e
+            if "model_not_found" in str(e) or "does not exist" in str(e):
+                continue
+            return {"available": False, "error": f"Groq chat request failed: {e}"}
+
+    return {"available": False, "error": f"Groq chat request failed with all attempted models: {last_error}"}

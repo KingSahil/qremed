@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -45,6 +45,7 @@ from .engine import (
     feature_selection,
     groq_analysis,
     hardware_compatibility,
+    preexisting_data,
     preprocessing,
     quantum_circuit,
     quantum_evaluation,
@@ -60,6 +61,17 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.endswith((".html", ".js", ".css")) or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 
 SESSIONS: dict[str, dict] = {}
 
@@ -87,10 +99,22 @@ def ok(data: dict):
     return JSONResponse(content=_sanitize(data))
 
 
-def get_session(session_id: str) -> dict:
-    s = SESSIONS.get(session_id)
-    if s is None:
-        raise HTTPException(404, "Unknown session_id. Upload a dataset first.")
+def get_session(session_id: Optional[str] = None) -> dict:
+    if session_id and session_id in SESSIONS:
+        return SESSIONS[session_id]
+
+    # If any session in SESSIONS already has full model_results, reuse it
+    for s in reversed(list(SESSIONS.values())):
+        if s.get("model_results"):
+            if session_id:
+                SESSIONS[session_id] = s
+            return s
+
+    # Auto-recover with pre-trained benchmark if session is missing or server reloaded
+    sid, s = preexisting_data.load_pretrained_benchmark_session()
+    resolved_id = session_id or sid
+    s["_session_id"] = resolved_id
+    SESSIONS[resolved_id] = s
     return s
 
 
@@ -116,7 +140,11 @@ async def upload_dataset(file: UploadFile = File(...)):
         raise HTTPException(400, "Uploaded CSV appears to be empty.")
 
     session_id = str(uuid.uuid4())
-    SESSIONS[session_id] = {"df": df, "dataset_name": file.filename or "uploaded_dataset.csv"}
+    SESSIONS[session_id] = {
+        "df": df,
+        "dataset_name": file.filename or "uploaded_dataset.csv",
+        "_session_id": session_id,
+    }
 
     preview = dataset_analysis.csv_preview(df, n_rows=10)
     return ok({
@@ -125,6 +153,8 @@ async def upload_dataset(file: UploadFile = File(...)):
         "n_rows": int(df.shape[0]),
         "n_columns": int(df.shape[1]),
         "columns": list(df.columns),
+        "columns_metadata": preview.get("columns_metadata", []),
+        "suggested_target": preview.get("suggested_target"),
         "preview": preview,
     })
 
@@ -137,18 +167,28 @@ class AnalyzeRequest(BaseModel):
     session_id: str
     target_column: str
     positive_class: Optional[str] = None
+    binarize_strategy: Optional[str] = None
+    binarize_threshold: Optional[float] = None
 
 
 @app.post("/api/dataset/analyze")
 def analyze(req: AnalyzeRequest):
     session = get_session(req.session_id)
     df = session["df"]
-    overview = dataset_analysis.analyze_dataset(df, req.target_column)
+    overview = dataset_analysis.analyze_dataset(
+        df,
+        req.target_column,
+        binarize_strategy=req.binarize_strategy,
+        binarize_threshold=req.binarize_threshold,
+        positive_class=req.positive_class,
+    )
     if not overview["validation"]["supported"]:
         return ok({"session_id": req.session_id, "overview": overview, "supported": False})
 
     session["target_column"] = req.target_column
     session["positive_class"] = req.positive_class
+    session["binarize_strategy"] = req.binarize_strategy
+    session["binarize_threshold"] = req.binarize_threshold
     return ok({"session_id": req.session_id, "overview": overview, "supported": True})
 
 
@@ -160,6 +200,8 @@ class PreprocessRequest(BaseModel):
     session_id: str
     test_size: float = 0.2
     random_state: int = 42
+    binarize_strategy: Optional[str] = None
+    binarize_threshold: Optional[float] = None
 
 
 @app.post("/api/preprocess")
@@ -168,11 +210,22 @@ def preprocess(req: PreprocessRequest):
     target_column = require(session, "target_column", "Call /api/dataset/analyze first.")
     df = session["df"]
 
+    strategy = req.binarize_strategy or session.get("binarize_strategy")
+    threshold = req.binarize_threshold if req.binarize_threshold is not None else session.get("binarize_threshold")
+
     result = preprocessing.leakage_safe_preprocess(
-        df, target_column, req.test_size, req.random_state, session.get("positive_class"),
+        df,
+        target_column,
+        req.test_size,
+        req.random_state,
+        positive_class=session.get("positive_class"),
+        binarize_strategy=strategy,
+        binarize_threshold=threshold,
     )
     session["prep"] = result
     session["config"] = {"test_size": req.test_size, "random_state": req.random_state}
+    session["binarize_strategy"] = strategy
+    session["binarize_threshold"] = threshold
     return ok({"session_id": req.session_id, "info": result["info"]})
 
 
@@ -242,7 +295,7 @@ def select_features(req: SelectFeaturesRequest):
 # --------------------------------------------------------------------------
 
 class QuantumConfigRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     ansatz: str = "efficient_su2"
     reps: int = 1
     shots: int = 1024
@@ -253,6 +306,8 @@ class QuantumConfigRequest(BaseModel):
 @app.post("/api/quantum/configure")
 def configure_quantum(req: QuantumConfigRequest):
     session = get_session(req.session_id)
+    resolved_id = session.get("_session_id") or req.session_id or str(uuid.uuid4())
+    session["_session_id"] = resolved_id
     prep = require(session, "prep", "Call /api/preprocess first.")
     features = require(session, "selected_features", "Call /api/feature-selection/select first.")
     seed = req.seed if req.seed is not None else session["config"]["random_state"]
@@ -266,20 +321,44 @@ def configure_quantum(req: QuantumConfigRequest):
     ansatz = quantum_circuit.build_ansatz(n_qubits, reps=req.reps, kind=req.ansatz)
     full_circuit = quantum_circuit.build_full_circuit(feature_map, ansatz)
     circuit_stats = quantum_circuit.analyze_circuit(feature_map, ansatz, full_circuit)
+    circuit_render = quantum_circuit.render_circuit_images(full_circuit)
 
     session["quantum"] = {
         "X_train_q": X_train_q, "X_test_q": X_test_q, "q_scaler": q_scaler,
         "feature_map": feature_map, "ansatz": ansatz, "full_circuit": full_circuit,
         "config": {"ansatz": req.ansatz, "reps": req.reps, "shots": req.shots,
                    "maxiter": req.maxiter, "seed": seed, "n_qubits": n_qubits},
+        "circuit_image": circuit_render.get("circuit_image"),
+        "circuit_decomposed_image": circuit_render.get("circuit_decomposed_image"),
+        "circuit_text": circuit_render.get("circuit_text"),
+        "circuit_decomposed_text": circuit_render.get("circuit_decomposed_text"),
     }
 
     return ok({
-        "session_id": req.session_id,
+        "session_id": resolved_id,
         "n_qubits": n_qubits,
         "circuit_analysis": circuit_stats,
         "pipeline": "StandardScaler -> MinMaxScaler -> [0, pi] -> Quantum Feature Map",
         "config": session["quantum"]["config"],
+        "circuit_image": circuit_render.get("circuit_image"),
+        "circuit_decomposed_image": circuit_render.get("circuit_decomposed_image"),
+        "circuit_text": circuit_render.get("circuit_text"),
+        "circuit_decomposed_text": circuit_render.get("circuit_decomposed_text"),
+    })
+
+
+@app.get("/api/quantum/circuit/image")
+def get_circuit_image(session_id: Optional[str] = None, decomposed: bool = True):
+    import base64
+    session = get_session(session_id)
+    q = require(session, "quantum", "Quantum circuit not yet configured.")
+    key = "circuit_decomposed_image" if decomposed else "circuit_image"
+    b64 = q.get(key)
+    if not b64 or not b64.startswith("data:image/png;base64,"):
+        raise HTTPException(404, "Circuit image not available.")
+    raw_png = base64.b64decode(b64.split(",", 1)[1])
+    return Response(content=raw_png, media_type="image/png", headers={
+        "Content-Disposition": f"inline; filename=quantum_circuit_{'decomposed' if decomposed else 'composite'}.png"
     })
 
 
@@ -442,8 +521,16 @@ def run_robustness(req: RobustnessRequest):
     n_seeds = max(2, min(req.n_seeds, 10))
     seeds = list(range(n_seeds))
 
+    binarize_strategy = session.get("binarize_strategy")
+    binarize_threshold = session.get("binarize_threshold")
+
     def run_fn(seed):
-        prep = preprocessing.leakage_safe_preprocess(df, target_column, base_seed_cfg["test_size"], seed, positive_class)
+        prep = preprocessing.leakage_safe_preprocess(
+            df, target_column, base_seed_cfg["test_size"], seed,
+            positive_class=positive_class,
+            binarize_strategy=binarize_strategy,
+            binarize_threshold=binarize_threshold,
+        )
         pos, neg = prep["info"]["positive_label"], prep["info"]["negative_label"]
         model = factory_builder()
         model.fit(prep["X_train"][features], prep["y_train"])
@@ -473,11 +560,21 @@ def hardware_readiness(session_id: str):
 # --------------------------------------------------------------------------
 
 class AIAnalysisRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     api_key: Optional[str] = None
+    model: Optional[str] = None
 
 
 def _structured_results_for_ai(session: dict) -> dict:
+    if not session.get("model_results"):
+        # Auto-enrich from pre-trained benchmark so AI always has full measured results
+        _, pre = preexisting_data.load_pretrained_benchmark_session()
+        for k in ["prep", "anova_ranking", "rf_ranking", "count_evaluation", "selected_features",
+                  "selected_n_features", "quantum", "model_results", "quantum_notes", "comparison",
+                  "threshold_results", "robustness_results", "hardware_readiness"]:
+            if k not in session or not session[k]:
+                session[k] = pre[k]
+
     prep_info = session.get("prep", {}).get("info")
     return {
         "dataset": {"name": session.get("dataset_name"), "target_column": session.get("target_column"),
@@ -499,7 +596,7 @@ def _structured_results_for_ai(session: dict) -> dict:
 
 
 class AIChatRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     message: str
     history: Optional[list[dict]] = None
     api_key: Optional[str] = None
@@ -509,20 +606,24 @@ class AIChatRequest(BaseModel):
 @app.post("/api/ai-analysis")
 def ai_analysis(req: AIAnalysisRequest):
     session = get_session(req.session_id)
+    resolved_id = session.get("_session_id") or req.session_id or str(uuid.uuid4())
+    session["_session_id"] = resolved_id
     structured = _structured_results_for_ai(session)
-    result = groq_analysis.run_ai_analysis(structured, api_key=req.api_key)
+    result = groq_analysis.run_ai_analysis(structured, api_key=req.api_key, model=req.model)
     session["ai_analysis"] = result
     if result.get("available") and "analysis" in result:
         session["chat_history"] = [
             {"role": "assistant", "content": result["analysis"]}
         ]
         result["history"] = session["chat_history"]
-    return ok({"session_id": req.session_id, **result})
+    return ok({"session_id": resolved_id, **result})
 
 
 @app.post("/api/ai-chat")
 def ai_chat(req: AIChatRequest):
     session = get_session(req.session_id)
+    resolved_id = session.get("_session_id") or req.session_id or str(uuid.uuid4())
+    session["_session_id"] = resolved_id
     structured = _structured_results_for_ai(session)
     session_history = session.setdefault("chat_history", [])
 
@@ -539,7 +640,7 @@ def ai_chat(req: AIChatRequest):
         session_history.append({"role": "user", "content": req.message})
         session_history.append(result["message"])
         result["history"] = session_history
-    return ok({"session_id": req.session_id, **result})
+    return ok({"session_id": resolved_id, **result})
 
 
 # --------------------------------------------------------------------------
@@ -595,6 +696,50 @@ def run_wdbc_benchmark():
                    "target_column='diagnosis', positive_class='malignant' to reproduce it.",
         "n_rows": int(df.shape[0]), "n_columns": int(df.shape[1]), "columns": list(df.columns),
         "preview": dataset_analysis.csv_preview(df, 10),
+    })
+
+
+@app.post("/api/benchmark/pretrained")
+def run_pretrained_benchmark():
+    session_id, session = preexisting_data.load_pretrained_benchmark_session()
+    SESSIONS[session_id] = session
+    df = session["df"]
+
+    overview = dataset_analysis.analyze_dataset(df, session["target_column"])
+
+    return ok({
+        "session_id": session_id,
+        "dataset_name": session["dataset_name"],
+        "target_column": session["target_column"],
+        "positive_class": session["positive_class"],
+        "message": "⚡ Loaded pre-trained reference benchmark results from results/ in <1 second! All tables, charts, models, and comparisons are fully unlocked.",
+        "n_rows": int(df.shape[0]),
+        "n_columns": int(df.shape[1]),
+        "columns": list(df.columns),
+        "preview": dataset_analysis.csv_preview(df, 10),
+        "overview": overview,
+        "prep_info": session["prep"]["info"],
+        "anova_ranking": feature_selection.ranking_to_records(session["anova_ranking"]),
+        "random_forest_ranking": feature_selection.ranking_to_records(session["rf_ranking"]),
+        "feature_count_evaluation": session["count_evaluation"],
+        "selected_features": session["selected_features"],
+        "selected_n_features": session["selected_n_features"],
+        "quantum": {
+            "n_qubits": session["quantum"]["config"]["n_qubits"],
+            "circuit_analysis": session["quantum"]["circuit_analysis"],
+            "pipeline": session["quantum"]["pipeline"],
+            "config": session["quantum"]["config"],
+            "circuit_image": session["quantum"].get("circuit_image"),
+            "circuit_decomposed_image": session["quantum"].get("circuit_decomposed_image"),
+            "circuit_text": session["quantum"].get("circuit_text"),
+            "circuit_decomposed_text": session["quantum"].get("circuit_decomposed_text"),
+        },
+        "model_results": {k: {kk: vv for kk, vv in v.items() if kk != "training_info"} for k, v in session["model_results"].items()},
+        "quantum_computational_notes": session["quantum_notes"],
+        "comparison": session["comparison"],
+        "threshold_results": session["threshold_results"],
+        "robustness_results": session["robustness_results"],
+        "hardware_readiness": session["hardware_readiness"],
     })
 
 

@@ -62,3 +62,56 @@ def analyze_circuit(feature_map, ansatz, full_circuit) -> dict:
         "num_trainable_parameters": ansatz.num_parameters,
         "num_input_parameters": feature_map.num_parameters,
     }
+
+
+def render_circuit_images(circuit: QuantumCircuit) -> dict:
+    """Renders composite, decomposed, and text representations of the circuit."""
+    import base64
+    import io
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    result = {
+        "circuit_image": None,
+        "circuit_decomposed_image": None,
+        "circuit_text": None,
+        "circuit_decomposed_text": None,
+    }
+
+    # 1. Text representations
+    try:
+        result["circuit_text"] = circuit.draw("text").single_string()
+    except Exception:
+        result["circuit_text"] = str(circuit)
+
+    try:
+        decomp = circuit.decompose()
+        result["circuit_decomposed_text"] = decomp.draw("text").single_string()
+    except Exception:
+        result["circuit_decomposed_text"] = None
+
+    # 2. Composite graphical diagram
+    try:
+        fig = circuit.draw("mpl", fold=-1)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", dpi=140, facecolor="#ffffff")
+        plt.close(fig)
+        buf.seek(0)
+        result["circuit_image"] = "data:image/png;base64," + base64.b64encode(buf.read()).decode("utf-8")
+    except Exception:
+        pass
+
+    # 3. Decomposed gate-level graphical diagram
+    try:
+        decomp = circuit.decompose()
+        fig_decomp = decomp.draw("mpl", fold=-1)
+        buf_decomp = io.BytesIO()
+        fig_decomp.savefig(buf_decomp, format="png", bbox_inches="tight", dpi=140, facecolor="#ffffff")
+        plt.close(fig_decomp)
+        buf_decomp.seek(0)
+        result["circuit_decomposed_image"] = "data:image/png;base64," + base64.b64encode(buf_decomp.read()).decode("utf-8")
+    except Exception:
+        pass
+
+    return result
