@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Q-REMED — Hybrid Quantum-Classical ML Platform</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="stylesheet" href="style.css?v=2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 
 </head>
@@ -14,8 +14,31 @@
 
   <nav class="sidebar">
     <div class="brand">
-      <div class="brand-mark">
-        <img src="logo.svg" alt="Q-REMED Quantum Logo" class="brand-icon">
+      <div class="brand-mark" title="Q-REMED Quantum ML">
+        <svg viewBox="0 0 100 100" class="brand-icon" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Quantum wave offset shadow (soft blue echo) -->
+          <g stroke="#93c5fd" stroke-width="4" opacity="0.65" transform="translate(3, -2)">
+            <ellipse cx="50" cy="50" rx="41" ry="16" />
+            <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(60 50 50)" />
+            <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(-60 50 50)" />
+            <circle cx="50" cy="50" r="7" fill="#bfdbfe" />
+          </g>
+
+          <!-- Orbit 1: Horizontal (Dark Navy/Slate) -->
+          <ellipse cx="50" cy="50" rx="41" ry="16" stroke="#1e293b" stroke-width="4.2" stroke-linecap="round" />
+          <circle cx="15" cy="54" r="5.5" fill="#ffffff" stroke="#1e293b" stroke-width="3.5" />
+
+          <!-- Orbit 2: Tilted 60 deg (Dark Navy/Slate) -->
+          <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(60 50 50)" stroke="#1e293b" stroke-width="4.2" stroke-linecap="round" />
+          <circle cx="71" cy="79" r="5.5" fill="#ffffff" stroke="#1e293b" stroke-width="3.5" />
+
+          <!-- Orbit 3: Tilted -60 deg (Vibrant Coral/Red Accent) -->
+          <ellipse cx="50" cy="50" rx="41" ry="16" transform="rotate(-60 50 50)" stroke="#ef4444" stroke-width="4.2" stroke-linecap="round" />
+          <circle cx="54" cy="18" r="5.5" fill="#ffffff" stroke="#ef4444" stroke-width="3.5" />
+
+          <!-- Central Core / Nucleus -->
+          <circle cx="50" cy="50" r="7" fill="#ffffff" stroke="#ef4444" stroke-width="4.2" />
+        </svg>
       </div>
       <div class="brand-text">
         <div class="brand-title">Q-REMED</div>
@@ -192,7 +215,7 @@
     <section class="section" id="section-ai">
       <div class="page-header"><h1>AI-assisted analysis</h1><p>Groq interprets the structured, already-measured results. It does not perform any quantum computation.</p></div>
       <div class="card">
-        <div class="field"><label>Groq API key (used only for this request, never stored)</label><input type="password" id="groqKey" placeholder="gsk_..."></div>
+        <div class="field"><label>Groq API key (optional if set in .env — used only for this request, never stored)</label><input type="password" id="groqKey" placeholder="Leave empty to use GROQ_API_KEY from .env, or paste gsk_..."></div>
         <div class="btn-row"><button class="btn" id="btnAiAnalysis">Generate AI-Assisted Analysis</button></div>
       </div>
       <div id="aiResults"></div>
