@@ -13,6 +13,14 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+_project_root_env = Path(__file__).resolve().parents[3] / ".env"
+if _project_root_env.exists():
+    load_dotenv(dotenv_path=_project_root_env)
 
 SYSTEM_PROMPT = """You are writing the "Q-REMED AI-Assisted Analysis" section of a hybrid \
 quantum-classical machine learning research report. You will be given a JSON object of \
@@ -51,15 +59,17 @@ def build_context(structured_results: dict) -> str:
     return json.dumps(structured_results, indent=2, default=str)
 
 
-def run_ai_analysis(structured_results: dict, api_key: str | None = None, model: str = "llama-3.3-70b-versatile") -> dict:
-    key = api_key or os.environ.get("GROQ_API_KEY")
+def run_ai_analysis(structured_results: dict, api_key: str | None = None, model: str | None = None) -> dict:
+    key = (api_key or "").strip() or os.environ.get("GROQ_API_KEY")
     if not key:
         return {
             "available": False,
-            "error": "No Groq API key configured. Set GROQ_API_KEY as an environment variable, "
+            "error": "No Groq API key configured. Set GROQ_API_KEY in your .env file or as an environment variable, "
                      "or provide one in the AI Analysis panel (it is used only for this request "
                      "and is never stored or hard-coded).",
         }
+
+    selected_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "llama-3.3-70b-versatile"
 
     try:
         from groq import Groq
@@ -69,7 +79,7 @@ def run_ai_analysis(structured_results: dict, api_key: str | None = None, model:
     try:
         client = Groq(api_key=key)
         response = client.chat.completions.create(
-            model=model,
+            model=selected_model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Here are the structured Q-REMED experiment results:\n\n{build_context(structured_results)}"},
@@ -78,6 +88,77 @@ def run_ai_analysis(structured_results: dict, api_key: str | None = None, model:
             max_tokens=2000,
         )
         text = response.choices[0].message.content
-        return {"available": True, "model": model, "analysis": text, "label": "AI-Assisted Analysis powered by Groq"}
+        return {"available": True, "model": selected_model, "analysis": text, "label": "AI-Assisted Analysis powered by Groq"}
     except Exception as e:
         return {"available": False, "error": f"Groq request failed: {e}"}
+
+
+CHAT_SYSTEM_PROMPT = """You are an expert AI Research Assistant for Q-REMED, a hybrid quantum-classical machine learning research platform.
+You are conversing with a researcher to help them analyze, interpret, and critically evaluate real experiment results from this platform.
+
+Context:
+You have access to the complete, structured JSON of measured experiment results (dataset summary, selected features, classical model metrics, quantum model metrics like QSVC/VQC, decision threshold results, multi-seed robustness, hardware compatibility, and stated limitations).
+
+Rules you must strictly follow:
+1. Grounded in facts: Never invent metrics, scores, or features not in the provided experiment context.
+2. Scientific objectivity: Never claim clinical validation or diagnostic suitability (Q-REMED is a research platform, not a medical diagnostic device).
+3. Quantum claims: Never claim "quantum advantage" unless the measured metrics directly support it on this specific dataset/split.
+4. Distinguish: Clearly separate MEASURED FACTS (exact numbers/metrics from the experiment) from your SCIENTIFIC INTERPRETATION (why an algorithm behaved as it did).
+5. Technical Depth: When asked about quantum concepts (e.g. quantum kernel estimation, ZZFeatureMap, ansatz depth, barren plateaus, NISQ noise, Brier scores, ROC-AUC vs PR-AUC), explain them clearly and link them to the observed experimental metrics.
+6. Formatting: Use clean markdown (bolding, lists, tables, code snippets) to make complex technical discussions easy to read.
+"""
+
+
+def run_ai_chat(
+    structured_results: dict,
+    messages: list[dict],
+    api_key: str | None = None,
+    model: str | None = None,
+) -> dict:
+    key = (api_key or "").strip() or os.environ.get("GROQ_API_KEY")
+    if not key:
+        return {
+            "available": False,
+            "error": "No Groq API key configured. Set GROQ_API_KEY in your .env file or as an environment variable, "
+                     "or provide one in the AI Chat panel.",
+        }
+
+    selected_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "llama-3.3-70b-versatile"
+
+    try:
+        from groq import Groq
+    except ImportError:
+        return {"available": False, "error": "The 'groq' Python package is not installed on the backend."}
+
+    try:
+        client = Groq(api_key=key)
+
+        # Build message history with experiment context in system prompt
+        groq_messages = [
+            {
+                "role": "system",
+                "content": f"{CHAT_SYSTEM_PROMPT}\n\n=== MEASURED EXPERIMENT CONTEXT (JSON) ===\n{build_context(structured_results)}",
+            }
+        ]
+
+        # Add user & assistant chat history
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role in ("user", "assistant") and content:
+                groq_messages.append({"role": role, "content": str(content)})
+
+        response = client.chat.completions.create(
+            model=selected_model,
+            messages=groq_messages,
+            temperature=0.3,
+            max_tokens=2048,
+        )
+        reply_content = response.choices[0].message.content
+        return {
+            "available": True,
+            "model": selected_model,
+            "message": {"role": "assistant", "content": reply_content},
+        }
+    except Exception as e:
+        return {"available": False, "error": f"Groq chat request failed: {e}"}

@@ -8,3 +8,4 @@ qiskit>=1.0
 qiskit-aer>=0.13
 qiskit-machine-learning>=0.7
 groq>=0.9
+python-dotenv>=1.0.0

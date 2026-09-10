@@ -215,7 +215,7 @@ Then open **http://localhost:8000/** in your browser.
 - **Interactive Dashboard**: Served directly by the backend at `http://localhost:8000/`
 - **Swagger API Docs**: Interactive API documentation at `http://localhost:8000/docs`
 - **Reference Benchmark**: Click "Run WDBC Benchmark" on the dashboard to reproduce the full pipeline end-to-end.
-- **AI-Assisted Analysis**: Optional Groq LLM integration (set `GROQ_API_KEY` or input key directly in UI).
+- **AI-Assisted Analysis**: Optional Groq LLM integration. Copy `.env.example` to `.env` and set `GROQ_API_KEY=gsk_...` (or input key directly in UI).
 
 ## Reading the results
 

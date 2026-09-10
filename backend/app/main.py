@@ -14,9 +14,19 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import time
 import uuid
+from pathlib import Path
 from typing import Optional
+
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+_project_root_env = Path(__file__).resolve().parents[2] / ".env"
+if _project_root_env.exists():
+    load_dotenv(dotenv_path=_project_root_env)
 
 import numpy as np
 import pandas as pd
