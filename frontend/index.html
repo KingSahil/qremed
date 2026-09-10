@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q-REMED — Hybrid Quantum-Classical ML Platform</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+
+</head>
+<body>
+<div class="app-shell">
+
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">Q</div>
+      <div class="brand-text">
+        <div class="brand-title">Q-REMED</div>
+        <div class="brand-sub">Research Platform</div>
+      </div>
+    </div>
+    <ul class="steps" id="stepNav"></ul>
+  </nav>
+
+  <main class="main">
+
+    <!-- STEP: upload -->
+    <section class="section" id="section-upload">
+      <div class="page-header">
+        <h1>Upload dataset</h1>
+        <p>Upload a CSV for binary classification, or run the validated WDBC reference benchmark.</p>
+      </div>
+
+      <div class="card">
+        <h3>Upload CSV</h3>
+        <div class="dropzone" id="dropzone">
+          <div class="icon">⬆</div>
+          <div><strong>Click to choose a CSV file</strong> or drag it here</div>
+          <div class="muted mt8">Binary classification, primarily numerical features</div>
+          <input type="file" id="fileInput" accept=".csv" style="display:none">
+        </div>
+        <div id="uploadStatus" class="mt16"></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="badge purple">Reference benchmark</span></h3>
+        <p class="muted">The Wisconsin Diagnostic Breast Cancer (WDBC) study is the validated reference case Q-REMED's methodology was built on. Running it reproduces that original research pipeline.</p>
+        <div class="btn-row">
+          <button class="btn purple" id="btnWdbc">Run WDBC Benchmark</button>
+        </div>
+      </div>
+
+      <div class="card" id="previewCard" style="display:none">
+        <h3>Dataset preview</h3>
+        <div id="previewMeta" class="muted mb0"></div>
+        <div class="table-wrap mt16"><table id="previewTable"></table></div>
+      </div>
+    </section>
+
+    <!-- STEP: analyze -->
+    <section class="section" id="section-analyze">
+      <div class="page-header"><h1>Dataset analysis</h1><p>Select the target column and inspect the dataset before anything touches the model pipeline.</p></div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field">
+            <label>Target column</label>
+            <select id="targetColumn"></select>
+          </div>
+          <div class="field">
+            <label>Positive class (optional)</label>
+            <select id="positiveClass"><option value="">Auto (second class alphabetically)</option></select>
+          </div>
+        </div>
+        <div class="btn-row"><button class="btn" id="btnAnalyze">Analyze Dataset</button></div>
+      </div>
+      <div id="analyzeResults"></div>
+    </section>
+
+    <!-- STEP: preprocess -->
+    <section class="section" id="section-preprocess">
+      <div class="page-header"><h1>Leakage-safe preprocessing</h1><p>Stratified split, training-only imputation and scaling.</p></div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Test size</label><input type="number" id="testSize" value="0.2" step="0.05" min="0.1" max="0.4"></div>
+          <div class="field"><label>Random seed</label><input type="number" id="randomSeed" value="42"></div>
+        </div>
+        <div class="btn-row"><button class="btn" id="btnPreprocess">Run Preprocessing</button></div>
+      </div>
+      <div id="preprocessResults"></div>
+    </section>
+
+    <!-- STEP: features -->
+    <section class="section" id="section-features">
+      <div class="page-header"><h1>Feature selection</h1><p>ANOVA F-score + Random Forest importance, computed on training data only.</p></div>
+      <div class="card">
+        <div class="btn-row"><button class="btn" id="btnFeatureSelect">Run Feature Ranking</button></div>
+      </div>
+      <div id="featureResults"></div>
+    </section>
+
+    <!-- STEP: quantum config -->
+    <section class="section" id="section-quantum">
+      <div class="page-header"><h1>Quantum configuration</h1><p>StandardScaler → MinMaxScaler → [0, π] → Quantum Feature Map, adapted to the selected feature count.</p></div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Ansatz</label>
+            <select id="ansatzType">
+              <option value="efficient_su2">EfficientSU2 (primary)</option>
+              <option value="real_amplitudes">RealAmplitudes (low-depth alternative)</option>
+            </select>
+          </div>
+          <div class="field"><label>Ansatz repetitions</label><input type="number" id="reps" value="1" min="1" max="4"></div>
+          <div class="field"><label>Shots</label><input type="number" id="shots" value="1024" step="256" min="128"></div>
+          <div class="field"><label>Optimizer max iterations</label><input type="number" id="maxiter" value="100" min="5" max="500"></div>
+        </div>
+        <div class="btn-row"><button class="btn purple" id="btnQuantumConfig">Configure Quantum Circuit</button></div>
+      </div>
+      <div id="quantumResults"></div>
+    </section>
+
+    <!-- STEP: run models -->
+    <section class="section" id="section-models">
+      <div class="page-header"><h1>Run models</h1><p>Real training and evaluation — classical baselines and quantum models on Qiskit Aer.</p></div>
+      <div class="card">
+        <div class="field-row">
+          <label class="checkbox-row"><input type="checkbox" id="runClassical" checked> Classical (Logistic Regression, Random Forest)</label>
+          <label class="checkbox-row"><input type="checkbox" id="runVqc" checked> VQC (EfficientSU2)</label>
+          <label class="checkbox-row"><input type="checkbox" id="runKernel" checked> Quantum Kernel SVM</label>
+        </div>
+        <div class="banner warn mt16">Quantum model training runs on a real simulator and can take a few minutes depending on the selected qubit count, shots, and iterations.</div>
+        <div class="btn-row"><button class="btn blue" id="btnRunModels">Run Models</button></div>
+        <div id="runModelsProgress"></div>
+      </div>
+      <div id="modelsResults"></div>
+    </section>
+
+    <!-- STEP: comparison -->
+    <section class="section" id="section-comparison">
+      <div class="page-header"><h1>Model comparison</h1><p>Central comparison dashboard — nothing here is assumed in advance.</p></div>
+      <div id="comparisonResults"></div>
+    </section>
+
+    <!-- STEP: threshold -->
+    <section class="section" id="section-threshold">
+      <div class="page-header"><h1>Threshold analysis</h1><p>Validation-only decision threshold selection.</p></div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Model</label>
+            <select id="thresholdModel"><option>Logistic Regression</option><option>Random Forest</option></select>
+          </div>
+          <div class="field"><label>Objective</label>
+            <select id="thresholdObjective">
+              <option value="maximize_f1">Maximize F1</option>
+              <option value="prioritize_sensitivity">Prioritize sensitivity</option>
+              <option value="prioritize_specificity">Prioritize specificity</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row"><button class="btn" id="btnThreshold">Analyze Threshold</button></div>
+      </div>
+      <div id="thresholdResults"></div>
+    </section>
+
+    <!-- STEP: robustness -->
+    <section class="section" id="section-robustness">
+      <div class="page-header"><h1>Robustness</h1><p>Multi-seed evaluation — mean, standard deviation, and range.</p></div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Model</label>
+            <select id="robustModel"><option>Logistic Regression</option><option>Random Forest</option></select>
+          </div>
+          <div class="field"><label>Number of seeds</label><input type="number" id="nSeeds" value="5" min="2" max="10"></div>
+        </div>
+        <div class="btn-row"><button class="btn" id="btnRobustness">Run Robustness Analysis</button></div>
+      </div>
+      <div id="robustnessResults"></div>
+    </section>
+
+    <!-- STEP: hardware -->
+    <section class="section" id="section-hardware">
+      <div class="page-header"><h1>Quantum hardware readiness</h1><p>Static transpilation check against a generic IBM-typical basis gate set.</p></div>
+      <div class="card">
+        <div class="btn-row"><button class="btn purple" id="btnHardware">Check Hardware Readiness</button></div>
+      </div>
+      <div id="hardwareResults"></div>
+    </section>
+
+    <!-- STEP: ai analysis -->
+    <section class="section" id="section-ai">
+      <div class="page-header"><h1>AI-assisted analysis</h1><p>Groq interprets the structured, already-measured results. It does not perform any quantum computation.</p></div>
+      <div class="card">
+        <div class="field"><label>Groq API key (used only for this request, never stored)</label><input type="password" id="groqKey" placeholder="gsk_..."></div>
+        <div class="btn-row"><button class="btn" id="btnAiAnalysis">Generate AI-Assisted Analysis</button></div>
+      </div>
+      <div id="aiResults"></div>
+    </section>
+
+    <!-- STEP: report -->
+    <section class="section" id="section-report">
+      <div class="page-header"><h1>Experiment report</h1><p>Complete summary of dataset, methodology, results, and limitations.</p></div>
+      <div class="card">
+        <div class="btn-row">
+          <button class="btn" id="btnReport">Generate Report</button>
+          <button class="btn secondary" id="btnExportReport">Export as JSON</button>
+        </div>
+      </div>
+      <div id="reportResults"></div>
+    </section>
+
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# Feature Set Decision â€” Q-REMED Phase 1
+# Feature Set Decision — Q-REMED Phase 1
 
 **Primary feature set:** 4_features (4 features)
 - worst concave points

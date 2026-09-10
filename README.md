@@ -198,6 +198,25 @@ uv run src/finalize_phase2b.py
 uv run src/finalize_phase2c.py
 ```
 
+## Web Platform & Interactive Dashboard
+
+In addition to the batch research scripts in `src/`, Q-REMED includes a generalized full-stack web platform with a FastAPI backend (`backend/`) and responsive frontend (`frontend/`). It allows uploading arbitrary tabular binary-classification datasets or reproducing the WDBC benchmark interactively through a step-by-step workflow:
+
+### Launching the Web Platform
+
+Run from the project root:
+
+```bash
+uv run uvicorn app.main:app --reload --port 8000 --app-dir backend
+```
+
+Then open **http://localhost:8000/** in your browser.
+
+- **Interactive Dashboard**: Served directly by the backend at `http://localhost:8000/`
+- **Swagger API Docs**: Interactive API documentation at `http://localhost:8000/docs`
+- **Reference Benchmark**: Click "Run WDBC Benchmark" on the dashboard to reproduce the full pipeline end-to-end.
+- **AI-Assisted Analysis**: Optional Groq LLM integration (set `GROQ_API_KEY` or input key directly in UI).
+
 ## Reading the results
 
 `Q_REMED_Results_Walkthrough.ipynb` walks through the pipeline stage by
