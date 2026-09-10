@@ -1,17 +1,15 @@
-# Q-REMED — Quantum vs Classical ML for Breast Cancer Diagnosis
+# Q-REMED — Quantum-Enhanced ML Research & Evaluation Dashboard
 
-Q-REMED benchmarks classical machine learning against quantum machine
-learning (variational circuits and quantum kernels) on the Breast Cancer
-Wisconsin (Diagnostic) dataset, with an emphasis on leakage-safe
-methodology, honest reporting of quantum underperformance, and a
-documented recovery process rather than a cherry-picked final number.
+Q-REMED is a full-stack research platform that benchmarks **classical machine learning against quantum machine learning** (variational circuits and quantum kernels) on any uploaded binary-classification dataset, with first-class support for the Breast Cancer Wisconsin (Diagnostic) benchmark.
 
-The project runs in four stages: **Phase 1** (classical baseline +
-feature selection), **Phase 2** (first variational quantum classifier,
-VQC), **Phase 2B** (diagnosing and recovering from the VQC's poor initial
-result), and **Phase 2C** (robustness checks + a quantum kernel model).
+The project is built in two layers:
 
-## TL;DR results
+- **Research pipeline** (`src/`) — four-phase experimental study on WDBC, focused on leakage-safe methodology, honest reporting of quantum underperformance, and a documented recovery process rather than cherry-picked final numbers.
+- **Interactive web platform** (`backend/` + `frontend/`) — a FastAPI + vanilla-JS dashboard that lets you upload *any* tabular dataset, run the full Q-REMED pipeline, and explore results across 12 guided steps — dynamically, without touching code.
+
+---
+
+## TL;DR results (WDBC benchmark)
 
 | Model | Accuracy | Sensitivity | Specificity | F1 | ROC-AUC |
 |---|---|---|---|---|---|
@@ -22,174 +20,229 @@ result), and **Phase 2C** (robustness checks + a quantum kernel model).
 | VQC, EfficientSU2 + validation-tuned threshold (Phase 2C) | 0.807 | 0.881 | 0.764 | 0.771 | 0.877 |
 | Quantum Kernel SVM (Phase 2C, 80/455 training subsample) | 0.877 | 0.690 | 0.986 | 0.806 | 0.924 |
 
-**Headline finding:** the first VQC configuration badly underperformed
-the classical baselines. Rather than hide or explain that away, the
-project ran a pre-registered failure analysis (ruled out data,
-preprocessing, and measurement bugs) and a pre-registered recovery
-protocol (ruled out shot noise and optimizer budget as the cause;
-identified the ansatz choice as the fix). The gap to classical ML
-narrows substantially but is not closed — that residual gap is reported
-as a real, current limitation, not smoothed over.
+**Headline finding:** the first VQC badly underperformed both classical baselines. Rather than hide that, the project ran a pre-registered failure analysis (ruling out data, preprocessing, and measurement bugs) and a pre-registered recovery protocol (ruling out shot noise and optimizer budget; identifying the ansatz as the fix). The gap to classical ML narrows substantially but is not closed — that residual gap is reported as a real limitation, not smoothed over.
+
+---
 
 ## Repository layout
 
 ```
 q_remed_phase1_2_2b_2c/
-├── README.md                          <- this file
-├── Q_REMED_Results_Walkthrough.ipynb  <- notebook reproducing the key results/figures
-├── src/                                <- pipeline source code
-│   ├── run_phase1.py                   <- entry point: classical pipeline
-│   ├── run_phase2.py                   <- entry point: first VQC pipeline
-│   ├── finalize_phase2.py              <- Phase 2 failure-analysis + honest write-up
-│   ├── finalize_phase2b.py             <- Phase 2B recovery decision + comparison table
-│   ├── finalize_phase2c.py             <- Phase 2C robustness/kernel write-up
-│   ├── config.py                       <- all experiment constants (single source of truth)
-│   ├── data_loader.py                  <- dataset loading + verification report
-│   ├── preprocessing.py                <- leakage-safe split + scaling
-│   ├── feature_selection.py            <- ANOVA (primary) + Random Forest (cross-check) ranking
-│   ├── decision.py                     <- Phase 1 primary/backup feature-set rule
-│   ├── classical_models.py             <- Logistic Regression / Random Forest training
-│   ├── evaluation.py                   <- shared metric computation (classical + quantum)
-│   ├── quantum_preprocessing.py        <- [0, π] rescaling for angle encoding
-│   ├── quantum_circuit.py              <- ZZFeatureMap / RealAmplitudes / EfficientSU2 circuits
-│   ├── quantum_model.py                <- VQC construction + training loop
-│   ├── quantum_kernel.py               <- quantum kernel construction for the kernel SVM
-│   ├── quantum_evaluation.py           <- VQC test-set evaluation
-│   ├── exact_training.py               <- statevector (noise-free) VQC training variant
-│   ├── failure_analysis.py             <- Phase 2 failure-analysis checks
-│   ├── hardware_compatibility.py       <- static transpile check against an IBM basis gate set
-│   ├── plotting.py / quantum_plotting.py <- confusion matrices, ROC curves, circuit diagrams
-├── results/                            <- every JSON/CSV artifact the pipeline produces
-└── figures/                            <- every PNG the pipeline produces
+├── README.md
+├── Q_REMED_Results_Walkthrough.ipynb   ← notebook reproducing key results/figures
+├── requirements.txt
+├── .env.example                         ← copy to .env and set GROQ_API_KEY
+│
+├── src/                                 ← batch research scripts (WDBC pipeline)
+│   ├── run_phase1.py                    ← classical baseline + feature selection
+│   ├── run_phase2.py                    ← first VQC pipeline
+│   ├── finalize_phase2.py               ← failure analysis + honest write-up
+│   ├── finalize_phase2b.py              ← trainability recovery decision
+│   ├── finalize_phase2c.py              ← robustness checks + quantum kernel SVM
+│   ├── config.py                        ← all experiment constants
+│   ├── data_loader.py                   ← dataset loading + verification
+│   ├── preprocessing.py                 ← leakage-safe split + scaling
+│   ├── feature_selection.py             ← ANOVA (primary) + RF (cross-check)
+│   ├── decision.py                      ← Phase 1 feature-set selection rule
+│   ├── classical_models.py              ← Logistic Regression / Random Forest
+│   ├── evaluation.py                    ← shared metrics (classical + quantum)
+│   ├── quantum_preprocessing.py         ← [0, π] rescaling for angle encoding
+│   ├── quantum_circuit.py               ← ZZFeatureMap / RealAmplitudes / EfficientSU2
+│   ├── quantum_model.py                 ← VQC construction + training loop
+│   ├── quantum_kernel.py                ← fidelity quantum kernel for SVM
+│   ├── quantum_evaluation.py            ← VQC test-set evaluation
+│   ├── exact_training.py                ← statevector (noise-free) VQC variant
+│   ├── failure_analysis.py              ← Phase 2 failure-analysis checks
+│   ├── hardware_compatibility.py        ← static transpile check (IBM basis gates)
+│   └── plotting.py / quantum_plotting.py
+│
+├── backend/
+│   └── app/
+│       ├── main.py                      ← FastAPI app + all REST endpoints
+│       └── engine/
+│           ├── dataset_analysis.py      ← multi-type column analysis + validation
+│           ├── preprocessing.py         ← leakage-safe pipeline (binary/continuous/multi)
+│           ├── feature_selection.py     ← ANOVA ranking
+│           ├── feature_count_selection.py ← feature-count auto-selection
+│           ├── classical_models.py      ← RF / LR / XGBoost training
+│           ├── evaluation.py            ← shared metrics
+│           ├── comparison.py            ← model comparison table
+│           ├── quantum_circuit.py       ← dynamic qubit-count VQC circuits
+│           ├── quantum_model.py         ← VQC training loop
+│           ├── quantum_kernel.py        ← quantum kernel SVM
+│           ├── quantum_preprocessing.py ← angle-encoding rescaler
+│           ├── quantum_evaluation.py    ← VQC evaluation
+│           ├── hardware_compatibility.py ← transpile + hardware readiness report
+│           ├── robustness.py            ← multi-seed robustness evaluation
+│           ├── threshold_analysis.py    ← decision-threshold sweep
+│           ├── groq_analysis.py         ← Groq LLM AI analysis + chat
+│           ├── device_detection.py      ← GPU/CPU device detection
+│           └── preexisting_data.py      ← WDBC pre-trained benchmark loader
+│
+├── frontend/
+│   ├── index.html                       ← single-page app (12-step wizard)
+│   ├── app.js                           ← full client-side logic (~1800 lines)
+│   └── style.css                        ← dark-mode design system
+│
+├── results/                             ← JSON/CSV artifacts from batch pipeline
+└── figures/                             ← PNG plots from batch pipeline
 ```
 
-## The four phases
+---
 
-### Phase 1 — Classical baseline (`run_phase1.py`)
-- Loads the Breast Cancer Wisconsin dataset (569 samples, 30 features,
-  malignant/benign) via scikit-learn and verifies the label encoding
-  from the data itself rather than assuming it.
-- Leakage-safe pipeline: stratified 80/20 split **first**, then a
-  `StandardScaler` fit on the training fold only.
-- Feature ranking on the training fold only: ANOVA F-score (primary),
-  Random Forest importance (cross-check only — never drives selection).
-- Trains Logistic Regression and Random Forest on a 4-feature and a
-  6-feature subset, and picks a **primary** feature set using a
-  pre-registered rule (prefer the smaller/4-feature set unless it costs
-  more than 2 pts of sensitivity or 5 pts of specificity vs. the
-  6-feature set). Result: the 4-feature set wins
-  (`worst concave points`, `worst perimeter`, `mean concave points`,
-  `worst radius`).
+## Web Platform — Interactive Dashboard
 
-### Phase 2 — First variational quantum classifier (`run_phase2.py`, `finalize_phase2.py`)
-- Reuses Phase 1's exact train/test split (verified bit-for-bit, not
-  just re-derived from the same seed) and its primary 4-feature set.
-- Adds a second, quantum-specific `[0, π]` scaling on top of Phase 1's
-  standardization, so periodic angle encoding never wraps two different
-  feature values onto the same quantum state.
-- Circuit: 4-qubit `ZZFeatureMap` (reps=1) + `RealAmplitudes` ansatz
-  (reps=1), trained with COBYLA on an ideal (noise-free) Aer simulator.
-- Result: the VQC substantially underperforms both classical baselines
-  and does not clearly beat a majority-class trivial baseline at the
-  default 0.5 threshold, despite an above-chance ROC-AUC.
-- A pre-registered failure analysis was triggered (gap > 0.10 accuracy)
-  and rules out: preprocessing/label/scaling bugs, circuit-construction
-  errors, and measurement-interpretation errors — pointing instead to a
-  genuine optimization/trainability limitation of this specific
-  circuit.
+The web platform supports **any tabular binary-classification CSV** (binary, continuous numeric, and multiclass targets via binarization are all supported). The WDBC benchmark is available as a one-click pre-trained reference.
 
-### Phase 2B — Diagnosing and recovering trainability (`finalize_phase2b.py`)
-Three candidate fixes were tested against three pre-registered cases:
-1. **Exact/statevector training** (removes shot noise) — barely moved
-   accuracy → shot noise was not the cause.
-2. **Extended optimizer budget** (232 effective evaluations vs. 100) —
-   barely moved accuracy, and the optimizer kept re-converging early →
-   optimizer budget was not the cause.
-3. **Alternative ansatz** (`EfficientSU2` instead of `RealAmplitudes`) —
-   accuracy rose from 0.596 to 0.807, F1 from 0.378 to 0.686, ROC-AUC
-   from 0.639 to 0.886 → **this was the fix**.
+### Quick start
 
-Because Case 3 succeeded, the 6-qubit fallback (only triggered if all
-three cases fail) was correctly skipped. `EfficientSU2` is adopted as
-the new candidate circuit going forward.
-
-### Phase 2C — Robustness and a quantum kernel model (`finalize_phase2c.py`)
-- **Seed robustness:** the recovered VQC was retrained across 5 seeds;
-  accuracy ranged 0.72–0.86 (std ≈ 0.05) — no seed catastrophically
-  failed, but there is real run-to-run variance the single headline
-  number hides.
-- **Validation-selected decision threshold:** choosing the
-  classification threshold on an internal validation split (not the
-  test set) to maximize F1 raised sensitivity from 0.571 to 0.881 at a
-  real, reported specificity cost (0.944 → 0.764).
-- **Quantum kernel SVM:** a fidelity-based quantum kernel (trained on an
-  80-sample stratified subsample for computational feasibility) reached
-  0.877 accuracy / 0.924 ROC-AUC — the strongest quantum result in the
-  project, though still trained on much less data than the classical
-  models and still short of them on sensitivity.
-- The `EfficientSU2` VQC (not the kernel model) is recommended to carry
-  forward into hardware/noise work, because its inference is a small
-  fixed circuit that fits a realistic hardware shot budget, whereas the
-  kernel method needs one circuit evaluation per train/test pair.
-
-## Setup and Installation
-
-### 1. Create a Virtual Environment
-
-Using **uv** (recommended):
 ```bash
+# From the project root:
+uv run uvicorn app.main:app --reload --port 8000 --app-dir backend
+```
+
+Then open **http://localhost:8000/** in your browser.
+
+### 12-step guided workflow
+
+| Step | Section | What it does |
+|---|---|---|
+| 1 | **Upload** | Upload any CSV or click "Run WDBC Benchmark" for the pre-trained reference |
+| 2 | **Analyze** | Inspects columns, detects target type (binary/continuous/multiclass), auto-suggests target column |
+| 3 | **Preprocess** | Leakage-safe stratified train/test split + StandardScaler fit on train fold only |
+| 4 | **Feature selection** | ANOVA F-score ranking on training fold; barchart of top features |
+| 5 | **Feature count** | Selects optimal feature count (auto or manual) |
+| 6 | **Quantum config** | Sets qubit count, feature map, ansatz, optimizer, reps — transpiles circuit live |
+| 7 | **Train models** | Trains Random Forest, Logistic Regression, XGBoost, and VQC in one click |
+| 8 | **Compare** | Side-by-side comparison table: accuracy, sensitivity, specificity, F1, ROC-AUC |
+| 9 | **Threshold** | Decision-threshold sweep for any trained model; pick operating point |
+| 10 | **Robustness** | Multi-seed (5×) robustness check for any classical model |
+| 11 | **Hardware** | Hardware-readiness report: transpiled depth, gate counts, IBM basis-gate compatibility |
+| 12 | **Report** | Full session summary + optional Groq AI narrative analysis + Markdown export |
+
+### Supported dataset types
+
+| Target type | How it's handled |
+|---|---|
+| Binary (0/1 or two string classes) | Native |
+| Continuous numeric | Binarized via median, mean, or custom threshold |
+| Multiclass | Binarized via One-vs-Rest (pick the positive class) |
+| Categorical features | Leakage-safe label encoding on train fold only |
+
+### Optional: Groq AI analysis
+
+Copy `.env.example` to `.env` and set your key:
+
+```
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile   # optional override
+```
+
+Or paste the key directly in the Step 12 UI. The AI uses the actual session results (features, metrics, model comparisons) — not hardcoded data.
+
+---
+
+## REST API
+
+The backend exposes a JSON API (Swagger UI at `/docs`):
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/dataset/upload` | Upload CSV → returns session_id, columns, suggested target |
+| `POST` | `/api/dataset/analyze` | Validate target column, inspect class balance |
+| `POST` | `/api/preprocess` | Leakage-safe split + scaling |
+| `POST` | `/api/feature-selection` | ANOVA ranking |
+| `POST` | `/api/feature-selection/select` | Confirm feature count |
+| `POST` | `/api/quantum/configure` | Configure + transpile quantum circuit |
+| `POST` | `/api/models/run` | Train RF / LR / XGBoost / VQC |
+| `GET`  | `/api/comparison` | Model comparison table |
+| `POST` | `/api/threshold` | Threshold sweep for a model |
+| `GET`  | `/api/threshold` | Retrieve stored threshold results |
+| `POST` | `/api/robustness` | Multi-seed robustness evaluation |
+| `GET`  | `/api/robustness` | Retrieve stored robustness results |
+| `GET`  | `/api/hardware-readiness` | Hardware compatibility report |
+| `GET`  | `/api/report` | Full session report |
+| `POST` | `/api/ai-analysis` | Groq LLM narrative analysis |
+| `POST` | `/api/ai-chat` | Groq LLM chat (session-aware) |
+| `POST` | `/api/benchmark/pretrained` | Load pre-trained WDBC benchmark session |
+| `GET`  | `/api/hardware/device-status` | GPU/CPU status |
+| `GET`  | `/api/health` | Health check |
+
+---
+
+## Research Pipeline — The four phases
+
+### Phase 1 — Classical baseline (`src/run_phase1.py`)
+- Loads the Breast Cancer Wisconsin dataset (569 samples, 30 features) via scikit-learn and verifies label encoding from the data itself.
+- Leakage-safe pipeline: stratified 80/20 split **first**, then `StandardScaler` fit on training fold only.
+- Feature ranking on training fold only: ANOVA F-score (primary), Random Forest importance (cross-check only — never drives selection).
+- Trains Logistic Regression and Random Forest on 4-feature and 6-feature subsets; picks primary set using a pre-registered rule. Result: 4-feature set wins (`worst concave points`, `worst perimeter`, `mean concave points`, `worst radius`).
+
+### Phase 2 — First variational quantum classifier (`src/run_phase2.py`, `src/finalize_phase2.py`)
+- Reuses Phase 1's exact train/test split and 4-feature set.
+- Circuit: 4-qubit `ZZFeatureMap` (reps=1) + `RealAmplitudes` ansatz (reps=1), COBYLA optimizer on ideal Aer simulator.
+- Result: VQC substantially underperforms both classical baselines. Pre-registered failure analysis (gap > 0.10 accuracy) rules out preprocessing/label/scaling/circuit bugs — points to a genuine trainability limitation.
+
+### Phase 2B — Diagnosing and recovering trainability (`src/finalize_phase2b.py`)
+Three pre-registered candidate fixes:
+1. **Exact/statevector training** — barely moved accuracy → shot noise was not the cause.
+2. **Extended optimizer budget** — barely moved accuracy → budget was not the cause.
+3. **Alternative ansatz** (`EfficientSU2`) — accuracy rose 0.596 → 0.807, F1 0.378 → 0.686, ROC-AUC 0.639 → 0.886 → **this was the fix**.
+
+### Phase 2C — Robustness and quantum kernel (`src/finalize_phase2c.py`)
+- **Seed robustness:** recovered VQC retrained across 5 seeds; accuracy ranged 0.72–0.86 (std ≈ 0.05).
+- **Validation-selected threshold:** choosing threshold on internal validation split to maximize F1 raised sensitivity 0.571 → 0.881 at a real, reported specificity cost (0.944 → 0.764).
+- **Quantum kernel SVM:** fidelity-based kernel on 80-sample subsample reached 0.877 accuracy / 0.924 ROC-AUC — strongest quantum result, though trained on less data than classical models.
+
+---
+
+## Setup & Installation
+
+### 1. Create a virtual environment
+
+```bash
+# Using uv (recommended)
 uv venv
-# On Windows PowerShell:
+
+# Activate — Windows PowerShell:
 .venv\Scripts\activate
-# On macOS/Linux:
+# macOS/Linux:
 source .venv/bin/activate
 ```
 
-Or using standard **Python venv**:
-```bash
-python -m venv .venv
-# On Windows PowerShell:
-.venv\Scripts\activate
-# On macOS/Linux:
-source .venv/bin/activate
-```
-
-### 2. Install Dependencies
-
-Install all core and quantum packages from the repository root:
+### 2. Install dependencies
 
 ```bash
-# Using uv
 uv pip install -r requirements.txt
-
-# Or using standard pip
+# or
 pip install -r requirements.txt
 ```
 
-> **Note:** If installing purely for Phase 1 (classical baseline), `scikit-learn`, `pandas`, `numpy`, `matplotlib`, and `seaborn` are sufficient. The quantum phases (Phase 2, 2B, 2C) require `qiskit`, `qiskit-aer`, and `qiskit-machine-learning`.
+> **Note:** Classical-only use (Phase 1 or web platform without VQC) needs only `scikit-learn`, `pandas`, `numpy`, `fastapi`, `uvicorn`, and `xgboost`. The quantum phases require `qiskit`, `qiskit-aer`, and `qiskit-machine-learning`.
 
-## Reproducing the Pipeline
+### 3. Configure environment (optional)
 
-Execute the pipeline stages in order from `src/`:
+```bash
+cp .env.example .env
+# Edit .env and set GROQ_API_KEY for AI analysis
+```
+
+---
+
+## Running the batch research pipeline
 
 ```bash
 cd src
 
-# Phase 1: Classical baseline + ANOVA feature selection
-python run_phase1.py          # writes results/ + figures/ for Phase 1
-
-# Phase 2: First VQC (ZZFeatureMap + RealAmplitudes) + Failure Analysis
-python run_phase2.py          # writes results/ + figures/ for Phase 2
-python finalize_phase2.py     # Phase 2 failure analysis + honest interpretation
-
-# Phase 2B: Trainability Recovery (EfficientSU2 ansatz)
-python finalize_phase2b.py    # Phase 2B recovery decision + comparison table
-
-# Phase 2C: Robustness Checks + Threshold Tuning + Quantum Kernel SVM
-python finalize_phase2c.py    # Phase 2C robustness + kernel writeup
+python run_phase1.py          # Classical baseline + ANOVA feature selection
+python run_phase2.py          # First VQC + Failure Analysis
+python finalize_phase2.py     # Phase 2 failure analysis write-up
+python finalize_phase2b.py    # Phase 2B recovery decision
+python finalize_phase2c.py    # Phase 2C robustness + kernel
 ```
 
-Alternatively, you can run them directly from the project root using `uv`:
+Or from the project root with `uv`:
+
 ```bash
 uv run src/run_phase1.py
 uv run src/run_phase2.py
@@ -198,40 +251,16 @@ uv run src/finalize_phase2b.py
 uv run src/finalize_phase2c.py
 ```
 
-## Web Platform & Interactive Dashboard
+Results (JSON/CSV) are written to `results/` and plots to `figures/`.
 
-In addition to the batch research scripts in `src/`, Q-REMED includes a generalized full-stack web platform with a FastAPI backend (`backend/`) and responsive frontend (`frontend/`). It allows uploading arbitrary tabular binary-classification datasets or reproducing the WDBC benchmark interactively through a step-by-step workflow:
-
-### Launching the Web Platform
-
-Run from the project root:
-
-```bash
-uv run uvicorn app.main:app --reload --port 8000 --app-dir backend
-```
-
-Then open **http://localhost:8000/** in your browser.
-
-- **Interactive Dashboard**: Served directly by the backend at `http://localhost:8000/`
-- **Swagger API Docs**: Interactive API documentation at `http://localhost:8000/docs`
-- **Reference Benchmark**: Click "Run WDBC Benchmark" on the dashboard to reproduce the full pipeline end-to-end.
-- **AI-Assisted Analysis**: Optional Groq LLM integration. Copy `.env.example` to `.env` and set `GROQ_API_KEY=gsk_...` (or input key directly in UI).
+---
 
 ## Reading the results
 
-`Q_REMED_Results_Walkthrough.ipynb` walks through the pipeline stage by
-stage using the artifacts already saved in `results/` and `figures/`
-(it does not require Qiskit or a live training run to execute) and ends
-with the final comparison table and scientific interpretation. For
-programmatic access, every stage's numeric output is also saved directly
-under `results/` (CSV tables and JSON reports) and every plot under
-`figures/`.
+`Q_REMED_Results_Walkthrough.ipynb` walks through the pipeline stage-by-stage using pre-saved artifacts in `results/` and `figures/` — it does not require a live Qiskit training run to execute — and ends with the final comparison table and scientific interpretation.
 
-## Scientific-integrity note
+---
 
-Every phase in this project reports its result as measured, including
-the substantial VQC underperformance in Phase 2. No result was adjusted,
-hidden, or re-run silently until it looked better; recovery experiments
-(Phase 2B/2C) are documented as separate, explicit, pre-registered
-attempts, and the remaining gap to classical ML is stated plainly in the
-final comparison table rather than implied away.
+## Scientific integrity note
+
+Every phase reports its result as measured, including the substantial VQC underperformance in Phase 2. No result was adjusted, hidden, or re-run silently until it looked better. Recovery experiments (Phase 2B/2C) are documented as separate, explicit, pre-registered attempts, and the remaining gap to classical ML is stated plainly in the final comparison table rather than implied away.
