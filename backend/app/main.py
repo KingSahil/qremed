@@ -323,6 +323,14 @@ def configure_quantum(req: QuantumConfigRequest):
     circuit_stats = quantum_circuit.analyze_circuit(feature_map, ansatz, full_circuit)
     circuit_render = quantum_circuit.render_circuit_images(full_circuit)
 
+    # Static transpilation check against IBM basis gates (auto-computed for active quantum circuit)
+    hw_readiness = None
+    try:
+        hw_readiness = hardware_compatibility.check_hardware_compatibility(full_circuit)
+        session["hardware_readiness"] = hw_readiness
+    except Exception as e:
+        print(f"Hardware readiness check on configure skipped: {e}")
+
     session["quantum"] = {
         "X_train_q": X_train_q, "X_test_q": X_test_q, "q_scaler": q_scaler,
         "feature_map": feature_map, "ansatz": ansatz, "full_circuit": full_circuit,
@@ -338,6 +346,7 @@ def configure_quantum(req: QuantumConfigRequest):
         "session_id": resolved_id,
         "n_qubits": n_qubits,
         "circuit_analysis": circuit_stats,
+        "hardware_readiness": hw_readiness,
         "pipeline": "StandardScaler -> MinMaxScaler -> [0, pi] -> Quantum Feature Map",
         "config": session["quantum"]["config"],
         "circuit_image": circuit_render.get("circuit_image"),
