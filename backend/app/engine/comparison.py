@@ -28,6 +28,8 @@ def build_comparison_table(model_results: dict) -> dict:
             "f1": round(m["f1"], 4),
             "roc_auc": round(m["roc_auc"], 4) if math.isfinite(m["roc_auc"]) else None,
             "training_time_seconds": r.get("training_time_seconds"),
+            "device": r.get("device", "CPU"),
+            "accelerator": r.get("accelerator", "CPU"),
         })
 
     classical_rows = [r for r in rows if r["type"] == "classical"]

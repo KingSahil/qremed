@@ -180,10 +180,26 @@
 
     <!-- STEP: run models -->
     <section class="section" id="section-models">
-      <div class="page-header"><h1>Run models</h1><p>Real training and evaluation — classical baselines and quantum models on Qiskit Aer.</p></div>
+      <div class="page-header"><h1>Run models</h1><p>Real training and evaluation — GPU-accelerated classical models and quantum models on Qiskit Aer.</p></div>
       <div class="card">
+        <!-- Hardware Accelerator Status Banner -->
+        <div id="deviceStatusBar" class="banner info" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+          <div>
+            <strong id="deviceStatusTitle">💻 Detecting Hardware Accelerator...</strong>
+            <div id="deviceStatusSub" class="muted" style="font-size:12px; margin-top:2px;">Checking GPU / CUDA and CPU resources...</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:12px; margin:0; font-weight:600;">Compute Mode:</label>
+            <select id="devicePreference" style="padding:4px 8px; font-size:12px; border-radius:4px;">
+              <option value="auto">Auto (Prefer GPU if present)</option>
+              <option value="gpu">Force GPU (CUDA)</option>
+              <option value="cpu">Force CPU Only</option>
+            </select>
+          </div>
+        </div>
+
         <div class="field-row">
-          <label class="checkbox-row"><input type="checkbox" id="runClassical" checked> Classical (Logistic Regression, Random Forest)</label>
+          <label class="checkbox-row"><input type="checkbox" id="runClassical" checked> Classical &amp; GPU Models (Logistic Regression, Random Forest, XGBoost GPU)</label>
           <label class="checkbox-row"><input type="checkbox" id="runVqc" checked> VQC (EfficientSU2)</label>
           <label class="checkbox-row"><input type="checkbox" id="runKernel" checked> Quantum Kernel SVM</label>
         </div>
@@ -206,7 +222,11 @@
       <div class="card">
         <div class="field-row">
           <div class="field"><label>Model</label>
-            <select id="thresholdModel"><option>Logistic Regression</option><option>Random Forest</option></select>
+            <select id="thresholdModel">
+              <option value="XGBoost (GPU)">XGBoost (GPU Accelerated)</option>
+              <option value="Random Forest">Random Forest</option>
+              <option value="Logistic Regression">Logistic Regression</option>
+            </select>
           </div>
           <div class="field"><label>Objective</label>
             <select id="thresholdObjective">
@@ -227,7 +247,11 @@
       <div class="card">
         <div class="field-row">
           <div class="field"><label>Model</label>
-            <select id="robustModel"><option>Logistic Regression</option><option>Random Forest</option></select>
+            <select id="robustModel">
+              <option value="XGBoost (GPU)">XGBoost (GPU Accelerated)</option>
+              <option value="Random Forest">Random Forest</option>
+              <option value="Logistic Regression">Logistic Regression</option>
+            </select>
           </div>
           <div class="field"><label>Number of seeds</label><input type="number" id="nSeeds" value="5" min="2" max="10"></div>
         </div>

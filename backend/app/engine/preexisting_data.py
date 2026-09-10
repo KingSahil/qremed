@@ -217,9 +217,13 @@ def load_pretrained_benchmark_session() -> Dict[str, Any]:
             t_json = json.load(f)
         thresh_data["EfficientSU2 VQC"] = {
             "optimal_threshold": t_json.get("chosen_threshold", 0.37),
+            "selected_threshold": t_json.get("chosen_threshold", 0.37),
+            "default_threshold": 0.5,
             "objective": "maximize_f1",
             "default_metrics": t_json.get("default_threshold_test_result", {}),
+            "default_threshold_metrics": t_json.get("default_threshold_test_result", {}),
             "optimal_metrics": t_json.get("validation_selected_threshold_test_result", {}),
+            "selected_threshold_metrics": t_json.get("validation_selected_threshold_test_result", {}),
             "curve": [
                 {"threshold": 0.2, "sensitivity": 0.952, "specificity": 0.611, "f1": 0.701},
                 {"threshold": 0.3, "sensitivity": 0.905, "specificity": 0.722, "f1": 0.752},
@@ -233,9 +237,13 @@ def load_pretrained_benchmark_session() -> Dict[str, Any]:
     # Classical threshold defaults
     thresh_data["Logistic Regression"] = {
         "optimal_threshold": 0.46,
+        "selected_threshold": 0.46,
+        "default_threshold": 0.5,
         "objective": "maximize_f1",
         "default_metrics": model_results["Logistic Regression"]["metrics"],
+        "default_threshold_metrics": model_results["Logistic Regression"]["metrics"],
         "optimal_metrics": {**model_results["Logistic Regression"]["metrics"], "sensitivity": 0.9762, "f1": 0.9213},
+        "selected_threshold_metrics": {**model_results["Logistic Regression"]["metrics"], "sensitivity": 0.9762, "f1": 0.9213},
         "curve": [
             {"threshold": 0.2, "sensitivity": 1.0, "specificity": 0.861, "f1": 0.894},
             {"threshold": 0.46, "sensitivity": 0.976, "specificity": 0.931, "f1": 0.921},

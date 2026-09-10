@@ -66,6 +66,9 @@ function goTo(stepId) {
   document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
   document.getElementById('section-' + stepId).classList.add('active');
   renderStepNav();
+  if (stepId === 'models') {
+    fetchDeviceStatus();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -121,10 +124,11 @@ function confusionMatrixHtml(cm) {
 }
 
 function renderMetricsTable(metricsList) {
-  // metricsList: [{label, metrics}]
+  // metricsList: [{label, metrics, device, accelerator}]
   let rows = metricsList.map(m => `
     <tr>
       <td>${m.label}</td>
+      <td><span class="badge ${m.device && m.device.includes('GPU') ? 'green' : 'blue'}">${m.device || 'CPU'}</span></td>
       <td class="num">${pct(m.metrics.accuracy)}</td>
       <td class="num">${pct(m.metrics.sensitivity)}</td>
       <td class="num">${pct(m.metrics.specificity)}</td>
@@ -133,7 +137,7 @@ function renderMetricsTable(metricsList) {
       <td class="num">${m.metrics.roc_auc ? num(m.metrics.roc_auc, 3) : '—'}</td>
     </tr>`).join('');
   return `<div class="table-wrap"><table>
-    <tr><th>Model</th><th>Accuracy</th><th>Sensitivity</th><th>Specificity</th><th>Precision</th><th>F1</th><th>ROC-AUC</th></tr>
+    <tr><th>Model</th><th>Accelerator</th><th>Accuracy</th><th>Sensitivity</th><th>Specificity</th><th>Precision</th><th>F1</th><th>ROC-AUC</th></tr>
     ${rows}
   </table></div>`;
 }
@@ -893,11 +897,17 @@ document.getElementById('btnRunModels').onclick = async () => {
   const runClassical = document.getElementById('runClassical').checked;
   const runVqc = document.getElementById('runVqc').checked;
   const runKernel = document.getElementById('runKernel').checked;
+  const devicePref = document.getElementById('devicePreference') ? document.getElementById('devicePreference').value : 'auto';
+
   btn.disabled = true;
-  progressEl.innerHTML = spinner('Training and evaluating models — quantum models may take several minutes...');
+  progressEl.innerHTML = spinner('Training and evaluating models (GPU / multi-core CPU) — quantum models may take several minutes...');
   try {
     const data = await api('POST', '/api/models/run', {
-      session_id: state.sessionId, run_classical: runClassical, run_vqc: runVqc, run_quantum_kernel: runKernel,
+      session_id: state.sessionId,
+      run_classical: runClassical,
+      run_vqc: runVqc,
+      run_quantum_kernel: runKernel,
+      prefer_device: devicePref,
     });
     progressEl.innerHTML = '';
     state.comparison = data.comparison;
@@ -913,10 +923,18 @@ document.getElementById('btnRunModels').onclick = async () => {
 function renderModelsAndComparison(data) {
   const resultsEl = document.getElementById('modelsResults');
   const notes = (data.quantum_computational_notes || []).map(n => `<div class="banner warn">${n}</div>`).join('');
-  const metricsList = Object.entries(data.model_results).map(([name, r]) => ({ label: name, metrics: r.metrics }));
+  const metricsList = Object.entries(data.model_results).map(([name, r]) => ({
+    label: name,
+    metrics: r.metrics,
+    device: r.device || (r.type === 'quantum' ? 'CPU Simulator' : 'CPU'),
+    accelerator: r.accelerator || 'CPU',
+  }));
   const cmCards = Object.entries(data.model_results).map(([name, r]) => `
     <div class="card">
-      <h3>${name} <span class="badge ${r.type === 'quantum' ? 'purple' : 'blue'}">${r.type}</span></h3>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3>${name} <span class="badge ${r.type === 'quantum' ? 'purple' : 'blue'}">${r.type}</span></h3>
+        <span class="badge ${r.device && r.device.includes('GPU') ? 'green' : 'gray'}">${r.device || 'CPU'}</span>
+      </div>
       <div style="max-width:420px">${confusionMatrixHtml(r.confusion_matrix)}</div>
     </div>`).join('');
   resultsEl.innerHTML = `${notes}<div class="card"><h3>Model results</h3>${renderMetricsTable(metricsList)}</div>${cmCards}`;
@@ -928,9 +946,11 @@ function renderComparison(comp, modelResults) {
   const rows = comp.rows.map(r => {
     const isBest = r.model === comp.best_overall_model;
     const cls = isBest ? (r.type === 'quantum' ? 'highlight-quantum' : 'highlight-row') : '';
+    const isGpu = r.device && r.device.includes('GPU');
     return `<tr class="${cls}">
       <td>${r.model}${isBest ? ' <span class="badge ' + (r.type === 'quantum' ? 'purple' : 'teal') + '">Best overall</span>' : ''}</td>
       <td><span class="badge ${r.type === 'quantum' ? 'purple' : 'blue'}">${r.type}</span></td>
+      <td><span class="badge ${isGpu ? 'green' : (r.type === 'quantum' ? 'purple' : 'gray')}">${r.device || 'CPU'}</span></td>
       <td class="num">${pct(r.accuracy)}</td>
       <td class="num">${pct(r.sensitivity)}</td>
       <td class="num">${pct(r.specificity)}</td>
@@ -944,7 +964,7 @@ function renderComparison(comp, modelResults) {
     <div class="card">
       <h3>Model Comparison</h3>
       <div class="table-wrap"><table>
-        <tr><th>Model</th><th>Type</th><th>Accuracy</th><th>Sensitivity</th><th>Specificity</th><th>Precision</th><th>F1</th><th>ROC-AUC</th><th>Training time</th></tr>
+        <tr><th>Model</th><th>Type</th><th>Accelerator</th><th>Accuracy</th><th>Sensitivity</th><th>Specificity</th><th>Precision</th><th>F1</th><th>ROC-AUC</th><th>Training time</th></tr>
         ${rows}
       </table></div>
       <div class="verdict-box ${comp.best_quantum_model && comp.best_overall_model === comp.best_quantum_model ? 'quantum' : 'classical'} mt16">${comp.verdict}</div>
@@ -1447,9 +1467,33 @@ function renderReport(r) {
     </div>`;
 }
 
+// ---------------- Hardware Detection ----------------
+async function fetchDeviceStatus() {
+  const bar = document.getElementById('deviceStatusBar');
+  const title = document.getElementById('deviceStatusTitle');
+  const sub = document.getElementById('deviceStatusSub');
+  if (!bar || !title || !sub) return;
+
+  try {
+    const info = await api('GET', '/api/hardware/device-status');
+    if (info && info.gpu && info.gpu.has_gpu) {
+      bar.className = 'banner success';
+      title.innerHTML = `⚡ GPU Detected: <strong>${info.gpu.device_name || 'NVIDIA GPU'}</strong> (${info.gpu.vram_total_mb ? info.gpu.vram_total_mb + ' MB VRAM' : 'CUDA Ready'})`;
+      sub.innerHTML = `Classical models (XGBoost GPU) will train on your NVIDIA GPU with CUDA acceleration. Quantum simulation utilizes ${info.cpu?.cores_logical || 32}-thread CPU acceleration.`;
+    } else {
+      bar.className = 'banner info';
+      title.innerHTML = `💻 CPU Compute Mode (${info.cpu?.cores_logical || 'multi'}-core)`;
+      sub.innerHTML = `No dedicated NVIDIA CUDA GPU detected on system. All models will train using CPU multi-threading.`;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch hardware status:', err);
+  }
+}
+
 // ---------------- init ----------------
 function initApp() {
   renderStepNav();
+  fetchDeviceStatus();
   goTo('upload');
 }
 

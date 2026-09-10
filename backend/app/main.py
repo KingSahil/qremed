@@ -371,6 +371,13 @@ class RunModelsRequest(BaseModel):
     run_classical: bool = True
     run_vqc: bool = True
     run_quantum_kernel: bool = True
+    prefer_device: str = "auto"  # "auto", "gpu", "cpu"
+
+
+@app.get("/api/hardware/device-status")
+def get_device_status():
+    from .engine.device_detection import get_system_hardware_summary
+    return ok(get_system_hardware_summary())
 
 
 @app.post("/api/models/run")
@@ -384,14 +391,24 @@ def run_models(req: RunModelsRequest):
     model_results: dict = session.get("model_results", {})
 
     if req.run_classical:
+        # Clear previous classical entries when re-running classical models (e.g. switching between GPU and CPU)
+        model_results = {k: v for k, v in model_results.items() if v.get("type") != "classical"}
         X_train_sel = prep["X_train"][features]
         X_test_sel = prep["X_test"][features]
-        trained = classical_models.train_all_baselines(X_train_sel, prep["y_train"], random_state=seed)
+        trained = classical_models.train_all_baselines(
+            X_train_sel, prep["y_train"], random_state=seed, prefer_device=req.prefer_device,
+        )
         for name, bundle in trained.items():
             ev = evaluation.evaluate_sklearn_model(bundle["model"], X_test_sel, prep["y_test"], pos, neg)
-            model_results[name] = {"type": "classical", "metrics": ev["metrics"],
-                                    "confusion_matrix": ev["confusion_matrix"], "roc_curve": ev["roc_curve"],
-                                    "training_time_seconds": bundle["training_time_seconds"]}
+            model_results[name] = {
+                "type": "classical",
+                "metrics": ev["metrics"],
+                "confusion_matrix": ev["confusion_matrix"],
+                "roc_curve": ev["roc_curve"],
+                "training_time_seconds": bundle["training_time_seconds"],
+                "device": bundle.get("device", "CPU"),
+                "accelerator": bundle.get("accelerator", "CPU"),
+            }
         session["_classical_models"] = {name: b["model"] for name, b in trained.items()}
 
     quantum_notes = []
@@ -414,6 +431,8 @@ def run_models(req: RunModelsRequest):
                                             "confusion_matrix": ev["confusion_matrix"], "roc_curve": ev["roc_curve"],
                                             "training_time_seconds": training_info["training_time_seconds"],
                                             "training_info": training_info,
+                                            "device": "CPU (Multi-threaded Simulator)",
+                                            "accelerator": "Qiskit Aer Simulator",
                                             "n_train_used": len(X_sub), "n_train_available": len(q["X_train_q"])}
 
         if req.run_quantum_kernel:
@@ -427,6 +446,8 @@ def run_models(req: RunModelsRequest):
                                                      "confusion_matrix": kres["confusion_matrix"], "roc_curve": kres["roc_curve"],
                                                      "training_time_seconds": kres["timing"]["svm_train_time_seconds"],
                                                      "timing": kres["timing"],
+                                                     "device": "CPU (Multi-threaded Simulator)",
+                                                     "accelerator": "Qiskit Aer Simulator",
                                                      "n_train_used": kres["n_train_subsampled"], "n_train_available": len(q["X_train_q"])}
 
     session["model_results"] = model_results
@@ -461,7 +482,21 @@ def _classical_model_factory(model_name: str, seed: int):
     if model_name == "Logistic Regression":
         return lambda: LogisticRegression(max_iter=1000, random_state=seed)
     if model_name == "Random Forest":
-        return lambda: RandomForestClassifier(n_estimators=200, random_state=seed)
+        return lambda: RandomForestClassifier(n_estimators=200, n_jobs=-1, random_state=seed)
+    if "XGBoost" in model_name:
+        import xgboost as xgb
+        from .engine.device_detection import detect_gpu
+        gpu = detect_gpu()
+        dev = "cuda" if gpu["has_gpu"] else "cpu"
+        return lambda: xgb.XGBClassifier(
+            device=dev,
+            tree_method="hist",
+            n_estimators=100,
+            max_depth=5,
+            learning_rate=0.1,
+            random_state=seed,
+            eval_metric="logloss",
+        )
     return None
 
 
@@ -473,11 +508,19 @@ def run_threshold(req: ThresholdRequest):
     seed = session["config"]["random_state"]
     pos, neg = prep["info"]["positive_label"], prep["info"]["negative_label"]
 
+    obj = req.objective
+    if obj == "f1":
+        obj = "maximize_f1"
+    elif obj in ("sensitivity", "recall"):
+        obj = "prioritize_sensitivity"
+    elif obj == "specificity":
+        obj = "prioritize_specificity"
+
     factory_builder = _classical_model_factory(req.model_name, seed)
     if factory_builder is None:
         return ok({"session_id": req.session_id, "supported": False,
                    "reason": f"Threshold analysis in this build supports classical models "
-                             f"('Logistic Regression', 'Random Forest') only, since it needs to refit "
+                             f"('Logistic Regression', 'Random Forest', 'XGBoost') only, since it needs to refit "
                              f"the model on a held-out validation split; refitting the quantum models for "
                              f"threshold tuning is not performed by default due to training cost."})
 
@@ -485,7 +528,7 @@ def run_threshold(req: ThresholdRequest):
     X_test_sel = prep["X_test"][features]
     result = threshold_analysis.run_threshold_analysis(
         factory_builder, X_train_sel, prep["y_train"], X_test_sel, prep["y_test"],
-        req.objective, pos, neg, random_state=seed,
+        obj, pos, neg, random_state=seed,
     )
     session.setdefault("threshold_results", {})[req.model_name] = result
     return ok({"session_id": req.session_id, "supported": True, "model_name": req.model_name, "result": result})

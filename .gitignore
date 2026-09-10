@@ -34,3 +34,6 @@ Desktop.ini
 .env
 *.log
 
+# Scratch scripts
+scratch/
+
