@@ -103,18 +103,24 @@ def get_session(session_id: Optional[str] = None) -> dict:
     if session_id and session_id in SESSIONS:
         return SESSIONS[session_id]
 
-    # If any session in SESSIONS already has full model_results, reuse it
+    # If a specific session_id was requested but not found (e.g. after server reload),
+    # create a fresh empty session keyed to that id rather than silently loading the
+    # WDBC benchmark data (which would inject breast-cancer columns into the user's flow).
+    if session_id:
+        fresh: dict = {"_session_id": session_id}
+        SESSIONS[session_id] = fresh
+        return fresh
+
+    # No session_id supplied (e.g. benchmark pre-load path): reuse an existing
+    # trained session or auto-recover with the pre-trained WDBC benchmark.
     for s in reversed(list(SESSIONS.values())):
         if s.get("model_results"):
-            if session_id:
-                SESSIONS[session_id] = s
             return s
 
-    # Auto-recover with pre-trained benchmark if session is missing or server reloaded
+    # Auto-recover with pre-trained benchmark only when no session_id was given
     sid, s = preexisting_data.load_pretrained_benchmark_session()
-    resolved_id = session_id or sid
-    s["_session_id"] = resolved_id
-    SESSIONS[resolved_id] = s
+    s["_session_id"] = sid
+    SESSIONS[sid] = s
     return s
 
 
@@ -174,6 +180,12 @@ class AnalyzeRequest(BaseModel):
 @app.post("/api/dataset/analyze")
 def analyze(req: AnalyzeRequest):
     session = get_session(req.session_id)
+    if "df" not in session:
+        raise HTTPException(
+            400,
+            "Session data not found — the server may have restarted. "
+            "Please re-upload your dataset and start again from Step 1."
+        )
     df = session["df"]
     overview = dataset_analysis.analyze_dataset(
         df,

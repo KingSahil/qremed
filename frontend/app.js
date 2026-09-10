@@ -616,7 +616,12 @@ document.getElementById('btnAnalyze').onclick = async () => {
       label: 'Samples', data: Object.values(ov.class_counts), color: '#0d9488',
     }]);
   } catch (e) {
-    resultsEl.innerHTML = `<div class="banner warn">${e.message}</div>`;
+    const msg = e.message || '';
+    if (msg.toLowerCase().includes('server may have restarted') || msg.toLowerCase().includes('session data not found')) {
+      resultsEl.innerHTML = `<div class="banner warn"><strong>⚠️ Session expired.</strong><br>The server was restarted and your session was lost. Please <a href="#" onclick="document.getElementById('fileInput').click();return false;">re-upload your dataset</a> to start again.</div>`;
+    } else {
+      resultsEl.innerHTML = `<div class="banner warn">${msg}</div>`;
+    }
   }
 };
 
