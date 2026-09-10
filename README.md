@@ -132,19 +132,71 @@ the new candidate circuit going forward.
   fixed circuit that fits a realistic hardware shot budget, whereas the
   kernel method needs one circuit evaluation per train/test pair.
 
-## Reproducing the pipeline
+## Setup and Installation
+
+### 1. Create a Virtual Environment
+
+Using **uv** (recommended):
+```bash
+uv venv
+# On Windows PowerShell:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
+```
+
+Or using standard **Python venv**:
+```bash
+python -m venv .venv
+# On Windows PowerShell:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
+```
+
+### 2. Install Dependencies
+
+Install all core and quantum packages from the repository root:
+
+```bash
+# Using uv
+uv pip install -r requirements.txt
+
+# Or using standard pip
+pip install -r requirements.txt
+```
+
+> **Note:** If installing purely for Phase 1 (classical baseline), `scikit-learn`, `pandas`, `numpy`, `matplotlib`, and `seaborn` are sufficient. The quantum phases (Phase 2, 2B, 2C) require `qiskit`, `qiskit-aer`, and `qiskit-machine-learning`.
+
+## Reproducing the Pipeline
+
+Execute the pipeline stages in order from `src/`:
 
 ```bash
 cd src
+
+# Phase 1: Classical baseline + ANOVA feature selection
 python run_phase1.py          # writes results/ + figures/ for Phase 1
+
+# Phase 2: First VQC (ZZFeatureMap + RealAmplitudes) + Failure Analysis
 python run_phase2.py          # writes results/ + figures/ for Phase 2
 python finalize_phase2.py     # Phase 2 failure analysis + honest interpretation
+
+# Phase 2B: Trainability Recovery (EfficientSU2 ansatz)
 python finalize_phase2b.py    # Phase 2B recovery decision + comparison table
+
+# Phase 2C: Robustness Checks + Threshold Tuning + Quantum Kernel SVM
 python finalize_phase2c.py    # Phase 2C robustness + kernel writeup
 ```
 
-Requires `pandas`, `numpy`, `scikit-learn`, `matplotlib`, and
-`qiskit`/`qiskit-machine-learning`/`qiskit-aer` for the quantum stages.
+Alternatively, you can run them directly from the project root using `uv`:
+```bash
+uv run src/run_phase1.py
+uv run src/run_phase2.py
+uv run src/finalize_phase2.py
+uv run src/finalize_phase2b.py
+uv run src/finalize_phase2c.py
+```
 
 ## Reading the results
 

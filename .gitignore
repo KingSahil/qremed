@@ -1,8 +1,36 @@
+# Virtual environments
 .venv/
 venv/
 ENV/
+env/
+
+# Python bytecode and cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.ipynb_checkpoints
 .pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Nested outputs if scripts are run inside src/
+src/results/
+src/figures/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating System files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment / secrets
+.env
+*.log
+
