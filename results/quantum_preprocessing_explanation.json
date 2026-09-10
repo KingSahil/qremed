@@ -1,0 +1,6 @@
+{
+  "why_standardization_first": "Phase 1's StandardScaler (mean 0, std 1) is reused unchanged so classical-baseline comparability and Phase 1's leakage-safe guarantees are preserved exactly.",
+  "why_additional_quantum_scaling": "ZZFeatureMap encodes feature values as rotation angles, which are periodic with period 2*pi. Unbounded standardized values risk two different feature values producing indistinguishable quantum states. An additional MinMaxScaler (fit on TRAIN only) maps every standardized feature into [0, pi], safely inside a single period.",
+  "expected_range": "[0, pi] for every one of the 4 selected features",
+  "where_applied": "As a separate step, immediately before circuit encoding -- NOT folded into Phase 1's saved scaler, so Phase 1's pipeline and artifacts remain completely unmodified."
+}

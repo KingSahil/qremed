@@ -1,0 +1,67 @@
+{
+  "circuit_analysis": {
+    "num_qubits": 4,
+    "feature_map": {
+      "depth": 17,
+      "gate_counts": {
+        "cx": 12,
+        "p": 10,
+        "h": 4
+      },
+      "two_qubit_gate_count": 12,
+      "total_gate_count": 26,
+      "num_parameters": 4
+    },
+    "ansatz": {
+      "depth": 7,
+      "gate_counts": {
+        "ry": 8,
+        "rz": 8,
+        "cx": 3
+      },
+      "two_qubit_gate_count": 3,
+      "total_gate_count": 19,
+      "num_parameters": 16
+    },
+    "full_circuit": {
+      "depth": 24,
+      "gate_counts": {
+        "cx": 15,
+        "p": 10,
+        "ry": 8,
+        "rz": 8,
+        "h": 4
+      },
+      "two_qubit_gate_count": 15,
+      "total_gate_count": 45
+    },
+    "num_trainable_parameters": 16,
+    "num_input_parameters": 4
+  },
+  "hardware_compatibility": {
+    "basis_gates_used_for_check": [
+      "rz",
+      "sx",
+      "x",
+      "cx"
+    ],
+    "optimization_level": 1,
+    "original_depth": 24,
+    "transpiled_depth": 32,
+    "transpiled_gate_counts": {
+      "rz": 42,
+      "sx": 20,
+      "cx": 15
+    },
+    "transpiled_two_qubit_gate_count": 15,
+    "gates_outside_basis_before_transpile": [
+      "p",
+      "ry",
+      "h"
+    ],
+    "transpilation_succeeded": true,
+    "measurement_structure": "Computational-basis measurement on all qubits, matching SamplerV2's counts-based output -- no mid-circuit measurement or conditional logic, which keeps the circuit compatible with standard Sampler primitive execution on real hardware.",
+    "parameter_binding_note": "Feature-map parameters are bound per-sample (data), ansatz parameters are bound once after training (frozen weights) -- this split is exactly what Phase 2's 'train locally, freeze, then run inference circuits on hardware' design in the master plan requires.",
+    "note": "This is a STATIC transpilation check against a generic IBM-typical basis gate set -- it does NOT reflect a specific real device's coupling map, calibration, or noise, and no Fake Backend or real hardware was used."
+  }
+}

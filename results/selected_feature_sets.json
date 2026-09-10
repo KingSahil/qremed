@@ -1,0 +1,16 @@
+{
+  "4_features": [
+    "worst concave points",
+    "worst perimeter",
+    "mean concave points",
+    "worst radius"
+  ],
+  "6_features": [
+    "worst concave points",
+    "worst perimeter",
+    "mean concave points",
+    "worst radius",
+    "mean perimeter",
+    "worst area"
+  ]
+}

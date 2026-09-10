@@ -1,0 +1,26 @@
+{
+  "case_evaluation": {
+    "case_1_exact_statevector_substantial_improvement": "NOT MET. Exact training improved accuracy by only 0.140 (0.597 -> 0.737), well short of the classical baseline, and showed run-to-run instability even without shot noise -- shot noise is not the primary limiting factor.",
+    "case_2_iteration_budget_substantial_improvement": "NOT MET. Extending the optimizer budget to 232 effective evaluations improved accuracy by only 0.026 (0.597 -> 0.623), and COBYLA re-converged early in every extension segment -- optimizer budget was not the limiting factor.",
+    "case_3_alternative_architecture_substantial_improvement": "MET. Switching to ZZFeatureMap+EfficientSU2 improved accuracy by 0.211 (0.597 -> 0.807), improved F1 from 0.378 to 0.686, and improved ROC-AUC from 0.639 to 0.886 -- the original feature-map/ansatz pairing (RealAmplitudes) was poorly suited to this task; EfficientSU2's extra RZ rotation layer per qubit gives it more expressive power per shallow layer."
+  },
+  "applicable_case": "CASE 3",
+  "six_qubit_fallback_needed": false,
+  "six_qubit_fallback_reason": "Not run, per the decision rule: Experiment D is only triggered if Experiments A, B, AND C all fail to help. Experiment C succeeded, so the 4-qubit representation with the alternative architecture is retained instead.",
+  "recommended_configuration": {
+    "feature_map": "ZZFeatureMap(reps=1)",
+    "ansatz": "EfficientSU2(reps=1)",
+    "qubits": 4,
+    "feature_set": "primary (4 features): worst concave points, worst perimeter, mean concave points, worst radius",
+    "optimizer": "COBYLA, maxiter=100",
+    "simulator": "Qiskit Aer, ideal (no noise), 1024 shots",
+    "trainable_parameters": 16,
+    "circuit_depth": 24,
+    "two_qubit_gate_count": 15
+  },
+  "why_selected": "Best accuracy/F1/ROC-AUC among all tested 4-qubit configurations by a wide margin, while remaining: reproducible (deterministic re-run reproduced 0.807 accuracy exactly); reasonably shallow (depth 24 vs 22 for the original -- a small, justified increase, not an expressivity sweep); hardware-compatible (structurally transpiles cleanly to a generic IBM basis, same 15 two-qubit gates as the original); explainable (still one feature per qubit, same primary biomedical feature set, no PCA); computationally feasible (same 100-iteration, 1024-shot budget as the original -- no more expensive to train).",
+  "four_qubits_still_viable": "Yes. The alternative architecture demonstrates 4 qubits CAN learn substantial useful signal from this feature representation (ROC-AUC 0.886, a large jump from chance and from the original 0.639) -- the earlier weak result was a circuit/ansatz choice problem, not a fundamental capacity limitation of 4 qubits.",
+  "gap_to_classical_still_remains": "Yes -- 0.123 accuracy gap remains to Logistic Regression (0.807 vs 0.930), and sensitivity in particular (0.571) is still well below the classical baselines (0.952) -- this is a real, reportable limitation, not resolved by this recovery experiment, and should not be understated in Phase 3 framing.",
+  "recommendation_for_phase_3": "Adopt ZZFeatureMap(reps=1)+EfficientSU2(reps=1) as the candidate VQC for Phase 3 Aer noise-robustness experiments, replacing the original RealAmplitudes-based circuit. State clearly in Phase 3 framing that this classifier still trails the classical baselines substantially (particularly on sensitivity), so noise-robustness results describe how a moderately-capable quantum classifier degrades under noise, not a strong one -- consistent with the project's scientific integrity principle of not overstating the quantum result.",
+  "no_large_search_was_run": "Confirmed: exactly one exact/statevector experiment (A), one extended-budget experiment (B, in 3 chained segments due to execution-time constraints, not as an expanded search), and one alternative-architecture experiment (C) were run, matching the Phase 2B 'maximum intended experiments' cap. Experiment D (6-qubit fallback) was correctly skipped, since it is only triggered when A, B, and C all fail."
+}

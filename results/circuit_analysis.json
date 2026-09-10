@@ -1,0 +1,37 @@
+{
+  "num_qubits": 4,
+  "feature_map": {
+    "depth": 17,
+    "gate_counts": {
+      "cx": 12,
+      "p": 10,
+      "h": 4
+    },
+    "two_qubit_gate_count": 12,
+    "total_gate_count": 26,
+    "num_parameters": 4
+  },
+  "ansatz": {
+    "depth": 5,
+    "gate_counts": {
+      "ry": 8,
+      "cx": 3
+    },
+    "two_qubit_gate_count": 3,
+    "total_gate_count": 11,
+    "num_parameters": 8
+  },
+  "full_circuit": {
+    "depth": 22,
+    "gate_counts": {
+      "cx": 15,
+      "p": 10,
+      "ry": 8,
+      "h": 4
+    },
+    "two_qubit_gate_count": 15,
+    "total_gate_count": 37
+  },
+  "num_trainable_parameters": 8,
+  "num_input_parameters": 4
+}

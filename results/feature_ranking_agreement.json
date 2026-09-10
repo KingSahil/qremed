@@ -1,0 +1,40 @@
+{
+  "top_n": 10,
+  "anova_top_features": [
+    "mean area",
+    "mean concave points",
+    "mean concavity",
+    "mean perimeter",
+    "mean radius",
+    "worst area",
+    "worst concave points",
+    "worst concavity",
+    "worst perimeter",
+    "worst radius"
+  ],
+  "rf_top_features": [
+    "mean area",
+    "mean concave points",
+    "mean concavity",
+    "mean perimeter",
+    "mean radius",
+    "worst area",
+    "worst concave points",
+    "worst concavity",
+    "worst perimeter",
+    "worst radius"
+  ],
+  "overlap_features": [
+    "mean area",
+    "mean concave points",
+    "mean concavity",
+    "mean perimeter",
+    "mean radius",
+    "worst area",
+    "worst concave points",
+    "worst concavity",
+    "worst perimeter",
+    "worst radius"
+  ],
+  "agreement_pct": 100.0
+}

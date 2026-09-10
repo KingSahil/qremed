@@ -1,0 +1,31 @@
+rank,feature,score,method
+1,worst perimeter,0.13310023764997225,random_forest_importance
+2,worst area,0.12805191271303082,random_forest_importance
+3,worst concave points,0.10810734174768957,random_forest_importance
+4,mean concave points,0.09441439125880831,random_forest_importance
+5,worst radius,0.09063889139731521,random_forest_importance
+6,mean radius,0.05866225824281181,random_forest_importance
+7,mean perimeter,0.05524182553576135,random_forest_importance
+8,mean area,0.04993761882368043,random_forest_importance
+9,mean concavity,0.046206958685895416,random_forest_importance
+10,worst concavity,0.035357137857065034,random_forest_importance
+11,area error,0.03436764533032062,random_forest_importance
+12,mean compactness,0.018093599420845832,random_forest_importance
+13,worst texture,0.017869409154311344,random_forest_importance
+14,worst compactness,0.014481404082817341,random_forest_importance
+15,mean texture,0.014316720485671626,random_forest_importance
+16,worst smoothness,0.014026029454676415,random_forest_importance
+17,radius error,0.013453901378078557,random_forest_importance
+18,worst symmetry,0.00957014324545949,random_forest_importance
+19,perimeter error,0.008138185252323333,random_forest_importance
+20,concavity error,0.007136480491296973,random_forest_importance
+21,worst fractal dimension,0.006387059942831735,random_forest_importance
+22,mean smoothness,0.006168015863936496,random_forest_importance
+23,texture error,0.005440575684338219,random_forest_importance
+24,mean symmetry,0.005004099420072717,random_forest_importance
+25,compactness error,0.00463015365826522,random_forest_importance
+26,symmetry error,0.0046107135539965585,random_forest_importance
+27,mean fractal dimension,0.0044651900731284165,random_forest_importance
+28,fractal dimension error,0.004365792783656445,random_forest_importance
+29,smoothness error,0.0041052060665348455,random_forest_importance
+30,concave points error,0.0036511007454073747,random_forest_importance

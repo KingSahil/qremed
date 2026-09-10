@@ -1,0 +1,7 @@
+Configuration,Qubits,Feature Set,Simulator,Shots,Optimizer,Iterations,Accuracy,Sensitivity,Specificity,Precision,F1,ROC-AUC
+1. Original VQC,4,primary (4 features),"Qiskit Aer (ideal, shot-based)",1024,COBYLA,100,0.5965,0.3333,0.75,0.4375,0.3784,0.6389
+2. Exact/statevector VQC,4,primary (4 features),"StatevectorEstimator (exact, zero shot noise)",N/A (exact),COBYLA,"100 (run-to-run instability observed: COBYLA converged at 67 evals in one run, 100 in a repeat run with the same seed/config -- see note below)",0.7368,0.5,0.875,0.7,0.5833,0.7335
+3. 300-iteration VQC (232 effective),4,primary (4 features),"Qiskit Aer (ideal, shot-based)",1024,COBYLA,100 + 76 + 56 = 232 effective evaluations (segments 2 and 3 each re-converged under COBYLA's own tolerance well before reaching 100 more each -- itself evidence against 'simply needs more iterations'),0.6228,0.3571,0.7778,0.4839,0.411,0.645
+4. Alternative architecture (EfficientSU2),4,primary (4 features),"Qiskit Aer (ideal, shot-based)",1024,COBYLA,100,0.807,0.5714,0.9444,0.8571,0.6857,0.8861
+Logistic Regression (classical),-,primary (4),-,-,-,-,0.9298,0.9524,0.9167,0.8696,0.9091,0.9907
+Random Forest (classical),-,primary (4),-,-,-,-,0.9298,0.9286,0.9306,0.8864,0.907,0.9856

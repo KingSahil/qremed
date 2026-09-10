@@ -1,0 +1,6 @@
+Model,Accuracy,Sensitivity,Specificity,F1,ROC-AUC,Qubits,Circuit depth,Two-qubit gates,Training/runtime
+Logistic Regression,0.9298,0.9524,0.9167,0.9091,0.9907,-,-,-,-
+Random Forest,0.9298,0.9286,0.9306,0.907,0.9856,-,-,-,-
+"EfficientSU2 VQC (default threshold, seed=42, full training set)",0.807,0.5714,0.9444,0.6857,0.8861,4,24,15,110.2s train
+"EfficientSU2 VQC (validation-selected threshold=0.37, train_sub 364/455)",0.807,0.881,0.7639,0.7708,0.8773,4,24,15,88.1s train (smaller train_sub)
+Quantum Kernel SVM (train subsampled to 80/455),0.8772,0.6905,0.9861,0.8056,0.9236,4,17,12,30.9s kernel-train + 168.5s kernel-test + 0.004s SVM

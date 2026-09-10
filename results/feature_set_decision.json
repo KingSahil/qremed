@@ -1,0 +1,37 @@
+{
+  "primary_feature_set_label": "4_features",
+  "primary_features": [
+    "worst concave points",
+    "worst perimeter",
+    "mean concave points",
+    "worst radius"
+  ],
+  "backup_feature_set_label": "6_features",
+  "backup_features": [
+    "worst concave points",
+    "worst perimeter",
+    "mean concave points",
+    "worst radius",
+    "mean perimeter",
+    "worst area"
+  ],
+  "sensitivity_drop_6_minus_4": 0.0,
+  "specificity_drop_6_minus_4": 0.0139,
+  "sensitivity_threshold": 0.02,
+  "specificity_threshold": 0.05,
+  "rationale": "4-feature subset maintains sensitivity/specificity within the pre-registered thresholds of the 6-feature subset (sensitivity drop=0.0000, specificity drop=0.0139, thresholds=0.02/0.05), so the smaller (4-qubit) set is preferred per the project's 'smallest useful circuit' bias.",
+  "avg_metrics_by_subset": {
+    "4_features": {
+      "sensitivity": 0.9405,
+      "specificity": 0.9236,
+      "f1": 0.908,
+      "accuracy": 0.9298
+    },
+    "6_features": {
+      "sensitivity": 0.9405,
+      "specificity": 0.9375,
+      "f1": 0.9188,
+      "accuracy": 0.9386
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "train_sub_size": 364,
+  "val_sub_size": 91,
+  "preregistered_rule": "maximize validation F1 for malignant (positive) class, threshold swept 0.01-0.99 step 0.01",
+  "chosen_threshold": 0.37,
+  "val_f1_at_threshold": 0.7428571428571429,
+  "default_threshold_test_result": {
+    "threshold": 0.5,
+    "accuracy": 0.7631578947368421,
+    "sensitivity": 0.47619047619047616,
+    "specificity": 0.9305555555555556,
+    "precision": 0.8,
+    "f1": 0.5970149253731343,
+    "roc_auc": 0.8773148148148149
+  },
+  "validation_selected_threshold_test_result": {
+    "threshold": 0.37,
+    "accuracy": 0.8070175438596491,
+    "sensitivity": 0.8809523809523809,
+    "specificity": 0.7638888888888888,
+    "precision": 0.6851851851851852,
+    "f1": 0.7708333333333334,
+    "roc_auc": 0.8773148148148149
+  },
+  "note": "Both results use the SAME train_sub-trained model (364/455 of original training set) -- only the decision threshold differs, isolating the threshold effect. This model was trained on less data than the main Phase 2B/2C candidate (which used the full 455-sample training set), so its default-threshold numbers are not expected to exactly match the main candidate result."
+}

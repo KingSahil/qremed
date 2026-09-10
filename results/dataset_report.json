@@ -1,0 +1,175 @@
+{
+  "row_meaning": "Each row is one fine-needle-aspirate (FNA) breast mass biopsy, summarized into 30 numeric features describing cell-nucleus shape and texture.",
+  "target_meaning": "Binary diagnosis: malignant vs benign tumor.",
+  "label_to_class_name": {
+    "0": "malignant",
+    "1": "benign"
+  },
+  "n_samples": 569,
+  "n_features": 30,
+  "feature_names": [
+    "mean radius",
+    "mean texture",
+    "mean perimeter",
+    "mean area",
+    "mean smoothness",
+    "mean compactness",
+    "mean concavity",
+    "mean concave points",
+    "mean symmetry",
+    "mean fractal dimension",
+    "radius error",
+    "texture error",
+    "perimeter error",
+    "area error",
+    "smoothness error",
+    "compactness error",
+    "concavity error",
+    "concave points error",
+    "symmetry error",
+    "fractal dimension error",
+    "worst radius",
+    "worst texture",
+    "worst perimeter",
+    "worst area",
+    "worst smoothness",
+    "worst compactness",
+    "worst concavity",
+    "worst concave points",
+    "worst symmetry",
+    "worst fractal dimension"
+  ],
+  "class_counts": {
+    "0": 212,
+    "1": 357
+  },
+  "class_balance_pct": {
+    "0": 37.26,
+    "1": 62.74
+  },
+  "missing_values_total": 0,
+  "duplicate_rows": 0,
+  "feature_ranges": {
+    "mean radius": {
+      "min": 6.981,
+      "max": 28.11
+    },
+    "mean texture": {
+      "min": 9.71,
+      "max": 39.28
+    },
+    "mean perimeter": {
+      "min": 43.79,
+      "max": 188.5
+    },
+    "mean area": {
+      "min": 143.5,
+      "max": 2501.0
+    },
+    "mean smoothness": {
+      "min": 0.05263,
+      "max": 0.1634
+    },
+    "mean compactness": {
+      "min": 0.01938,
+      "max": 0.3454
+    },
+    "mean concavity": {
+      "min": 0.0,
+      "max": 0.4268
+    },
+    "mean concave points": {
+      "min": 0.0,
+      "max": 0.2012
+    },
+    "mean symmetry": {
+      "min": 0.106,
+      "max": 0.304
+    },
+    "mean fractal dimension": {
+      "min": 0.04996,
+      "max": 0.09744
+    },
+    "radius error": {
+      "min": 0.1115,
+      "max": 2.873
+    },
+    "texture error": {
+      "min": 0.3602,
+      "max": 4.885
+    },
+    "perimeter error": {
+      "min": 0.757,
+      "max": 21.98
+    },
+    "area error": {
+      "min": 6.802,
+      "max": 542.2
+    },
+    "smoothness error": {
+      "min": 0.001713,
+      "max": 0.03113
+    },
+    "compactness error": {
+      "min": 0.002252,
+      "max": 0.1354
+    },
+    "concavity error": {
+      "min": 0.0,
+      "max": 0.396
+    },
+    "concave points error": {
+      "min": 0.0,
+      "max": 0.05279
+    },
+    "symmetry error": {
+      "min": 0.007882,
+      "max": 0.07895
+    },
+    "fractal dimension error": {
+      "min": 0.0008948,
+      "max": 0.02984
+    },
+    "worst radius": {
+      "min": 7.93,
+      "max": 36.04
+    },
+    "worst texture": {
+      "min": 12.02,
+      "max": 49.54
+    },
+    "worst perimeter": {
+      "min": 50.41,
+      "max": 251.2
+    },
+    "worst area": {
+      "min": 185.2,
+      "max": 4254.0
+    },
+    "worst smoothness": {
+      "min": 0.07117,
+      "max": 0.2226
+    },
+    "worst compactness": {
+      "min": 0.02729,
+      "max": 1.058
+    },
+    "worst concavity": {
+      "min": 0.0,
+      "max": 1.252
+    },
+    "worst concave points": {
+      "min": 0.0,
+      "max": 0.291
+    },
+    "worst symmetry": {
+      "min": 0.1565,
+      "max": 0.6638
+    },
+    "worst fractal dimension": {
+      "min": 0.05504,
+      "max": 0.2075
+    }
+  },
+  "preprocessing_required": "Standardization (features span very different numeric scales, e.g. 'mean area' in the hundreds vs 'mean smoothness' in the hundredths), stratified train/test split, and a duplicate-row check before any downstream step."
+}

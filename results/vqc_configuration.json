@@ -1,0 +1,31 @@
+{
+  "num_qubits": 4,
+  "primary_features": [
+    "worst concave points",
+    "worst perimeter",
+    "mean concave points",
+    "worst radius"
+  ],
+  "feature_map": {
+    "type": "ZZFeatureMap",
+    "reps": 1,
+    "feature_dimension": 4
+  },
+  "ansatz": {
+    "type": "RealAmplitudes",
+    "reps": 1,
+    "num_qubits": 4
+  },
+  "optimizer": {
+    "type": "COBYLA",
+    "maxiter": 100
+  },
+  "sampler": {
+    "type": "AerSamplerV2 (ideal, no noise model)",
+    "shots": 1024,
+    "seed": 42
+  },
+  "loss": "cross_entropy",
+  "random_seed": 42,
+  "execution_environment": "Ideal Qiskit Aer simulation only -- no noise, no fake backend, no IBM hardware."
+}
