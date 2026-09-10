@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from .device_detection import detect_gpu
 
 DEFAULT_LR_PARAMS = {"max_iter": 1000}
-DEFAULT_RF_PARAMS = {"n_estimators": 200, "n_jobs": -1}
+DEFAULT_RF_PARAMS = {"n_estimators": 200, "n_jobs": 1}
 
 
 def train_all_baselines(X_train, y_train, random_state: int = 42, prefer_device: str = "auto"):

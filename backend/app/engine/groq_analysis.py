@@ -59,6 +59,25 @@ def build_context(structured_results: dict) -> str:
     return json.dumps(structured_results, indent=2, default=str)
 
 
+import re
+
+
+def _clean_think_tags(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    if not cleaned and "<think>" in text:
+        # If the output ended inside a reasoning block, strip the tags rather than returning empty
+        cleaned = re.sub(r"</?think>", "", text).strip()
+    elif "<think>" in cleaned and "</think>" not in cleaned:
+        tail_stripped = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL).strip()
+        if tail_stripped:
+            cleaned = tail_stripped
+        else:
+            cleaned = re.sub(r"</?think>", "", cleaned).strip()
+    return cleaned if cleaned else text.strip()
+
+
 def run_ai_analysis(structured_results: dict, api_key: str | None = None, model: str | None = None) -> dict:
     key = (api_key or "").strip() or os.environ.get("GROQ_API_KEY")
     if not key:
@@ -70,7 +89,7 @@ def run_ai_analysis(structured_results: dict, api_key: str | None = None, model:
         }
 
     primary_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "qwen/qwen3.8-27b"
-    fallback_models = [primary_model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    fallback_models = [primary_model, "qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     # De-duplicate while preserving order
     models_to_try = list(dict.fromkeys(fallback_models))
 
@@ -82,7 +101,8 @@ def run_ai_analysis(structured_results: dict, api_key: str | None = None, model:
     last_error = None
     for mdl in models_to_try:
         try:
-            client = Groq(api_key=key)
+            client = Groq(api_key=key, timeout=12.0, max_retries=0)
+            tokens_limit = 900 if "qwen" in mdl.lower() else 1800
             response = client.chat.completions.create(
                 model=mdl,
                 messages=[
@@ -90,13 +110,14 @@ def run_ai_analysis(structured_results: dict, api_key: str | None = None, model:
                     {"role": "user", "content": f"Here are the structured Q-REMED experiment results:\n\n{build_context(structured_results)}"},
                 ],
                 temperature=0.2,
-                max_tokens=2048,
+                max_tokens=tokens_limit,
             )
-            text = response.choices[0].message.content
+            text = _clean_think_tags(response.choices[0].message.content or "")
             return {"available": True, "model": mdl, "analysis": text, "label": f"AI-Assisted Analysis powered by Groq ({mdl})"}
         except Exception as e:
             last_error = e
-            if "model_not_found" in str(e) or "does not exist" in str(e):
+            err_str = str(e).lower()
+            if "model_not_found" in err_str or "does not exist" in err_str or "rate_limit" in err_str or "429" in err_str or "tokens" in err_str:
                 continue
             return {"available": False, "error": f"Groq request failed: {e}"}
 
@@ -134,7 +155,7 @@ def run_ai_chat(
         }
 
     primary_model = (model or "").strip() or os.environ.get("GROQ_MODEL") or "qwen/qwen3.8-27b"
-    fallback_models = [primary_model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    fallback_models = [primary_model, "qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     models_to_try = list(dict.fromkeys(fallback_models))
 
     try:
@@ -160,14 +181,15 @@ def run_ai_chat(
     last_error = None
     for mdl in models_to_try:
         try:
-            client = Groq(api_key=key)
+            client = Groq(api_key=key, timeout=12.0, max_retries=0)
+            tokens_limit = 900 if "qwen" in mdl.lower() else 1800
             response = client.chat.completions.create(
                 model=mdl,
                 messages=groq_messages,
                 temperature=0.3,
-                max_tokens=2048,
+                max_tokens=tokens_limit,
             )
-            reply_content = response.choices[0].message.content
+            reply_content = _clean_think_tags(response.choices[0].message.content or "")
             return {
                 "available": True,
                 "model": mdl,
@@ -175,7 +197,8 @@ def run_ai_chat(
             }
         except Exception as e:
             last_error = e
-            if "model_not_found" in str(e) or "does not exist" in str(e):
+            err_str = str(e).lower()
+            if "model_not_found" in err_str or "does not exist" in err_str or "rate_limit" in err_str or "429" in err_str or "tokens" in err_str:
                 continue
             return {"available": False, "error": f"Groq chat request failed: {e}"}
 

@@ -68,6 +68,14 @@ function goTo(stepId) {
   renderStepNav();
   if (stepId === 'models') {
     fetchDeviceStatus();
+  } else if (stepId === 'threshold') {
+    autoLoadThreshold();
+  } else if (stepId === 'robustness') {
+    autoLoadRobustness();
+  } else if (stepId === 'hardware') {
+    autoLoadHardware();
+  } else if (stepId === 'report') {
+    autoLoadReport();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -143,6 +151,36 @@ function renderMetricsTable(metricsList) {
 }
 
 // ---------------- STEP: Upload ----------------
+function resetSessionUi() {
+  state.sessionId = null;
+  state.columns = [];
+  state.columnsMetadata = [];
+  state.suggestedTarget = null;
+  state.classes = [];
+  state.selectedFeatures = null;
+  state.comparison = null;
+  state.unlocked = new Set(['upload']);
+
+  const idsToClear = [
+    'uploadStatus', 'previewMeta', 'previewTable', 'analyzeResults',
+    'preprocessResults', 'featureResults', 'quantumResults', 'modelsResults',
+    'comparisonResults', 'thresholdResults', 'robustnessResults', 'hardwareResults',
+    'reportResults', 'chatFeed'
+  ];
+  idsToClear.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+
+  const previewCard = document.getElementById('previewCard');
+  if (previewCard) previewCard.style.display = 'none';
+
+  chatMessages = [];
+  lastReport = null;
+  renderChatMessages();
+  renderStepNav();
+}
+
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
 dropzone.onclick = () => fileInput.click();
@@ -152,6 +190,7 @@ dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('drag')
 fileInput.onchange = () => { if (fileInput.files[0]) handleUpload(fileInput.files[0]); };
 
 async function handleUpload(file) {
+  resetSessionUi();
   const statusEl = document.getElementById('uploadStatus');
   statusEl.innerHTML = spinner('Uploading and inspecting CSV...');
   try {
@@ -172,6 +211,7 @@ async function handleUpload(file) {
 }
 
 document.getElementById('btnWdbc').onclick = async () => {
+  resetSessionUi();
   const btn = document.getElementById('btnWdbc');
   btn.disabled = true; btn.textContent = 'Loading WDBC...';
   try {
@@ -932,13 +972,33 @@ function renderModelsAndComparison(data) {
   const cmCards = Object.entries(data.model_results).map(([name, r]) => `
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h3>${name} <span class="badge ${r.type === 'quantum' ? 'purple' : 'blue'}">${r.type}</span></h3>
+        <h3>${escapeHtml(name)} <span class="badge ${r.type === 'quantum' ? 'purple' : 'blue'}">${r.type}</span></h3>
         <span class="badge ${r.device && r.device.includes('GPU') ? 'green' : 'gray'}">${r.device || 'CPU'}</span>
       </div>
       <div style="max-width:420px">${confusionMatrixHtml(r.confusion_matrix)}</div>
     </div>`).join('');
   resultsEl.innerHTML = `${notes}<div class="card"><h3>Model results</h3>${renderMetricsTable(metricsList)}</div>${cmCards}`;
   renderComparison(data.comparison, data.model_results);
+
+  // Dynamically populate select dropdowns for Threshold and Robustness tabs
+  const classicalModelNames = Object.entries(data.model_results)
+    .filter(([, v]) => v.type === 'classical')
+    .map(([k]) => k);
+
+  const bestClassical = (data.comparison && data.comparison.best_classical_model) || classicalModelNames[0] || 'Random Forest';
+
+  const thSelect = document.getElementById('thresholdModel');
+  if (thSelect && classicalModelNames.length) {
+    thSelect.innerHTML = classicalModelNames.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    if (classicalModelNames.includes(bestClassical)) thSelect.value = bestClassical;
+  }
+
+  const robSelect = document.getElementById('robustModel');
+  if (robSelect && classicalModelNames.length) {
+    robSelect.innerHTML = `<option value="all">⚡ All Trained Classical Models</option>` +
+      classicalModelNames.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    robSelect.value = 'all';
+  }
 }
 
 function renderComparison(comp, modelResults) {
@@ -995,87 +1055,189 @@ function renderComparison(comp, modelResults) {
 }
 
 // ---------------- STEP: Threshold ----------------
-document.getElementById('btnThreshold').onclick = async () => {
+async function autoLoadThreshold() {
   const resultsEl = document.getElementById('thresholdResults');
-  resultsEl.innerHTML = spinner('Selecting threshold on a held-out validation split...');
+  if (!resultsEl || resultsEl.innerHTML.trim() !== '' || !state.sessionId) return;
+  await runThresholdAnalysis();
+}
+
+async function runThresholdAnalysis(modelName, objective) {
+  const resultsEl = document.getElementById('thresholdResults');
+  resultsEl.innerHTML = spinner('Selecting optimal decision threshold on a held-out validation split...');
   try {
+    const m = modelName || (document.getElementById('thresholdModel') ? document.getElementById('thresholdModel').value : 'Random Forest');
+    const obj = objective || (document.getElementById('thresholdObjective') ? document.getElementById('thresholdObjective').value : 'maximize_f1');
     const data = await api('POST', '/api/threshold', {
       session_id: state.sessionId,
-      model_name: document.getElementById('thresholdModel').value,
-      objective: document.getElementById('thresholdObjective').value,
+      model_name: m,
+      objective: obj,
     });
     if (!data.supported) { resultsEl.innerHTML = `<div class="banner info">${data.reason}</div>`; return; }
-    const r = data.result;
-    resultsEl.innerHTML = `
-      <div class="banner warn">${r.warning}</div>
-      <div class="card">
-        <h3>Threshold comparison — ${data.model_name}</h3>
-        <p class="muted small">Selected on: ${r.selected_on}</p>
-        ${renderMetricsTable([
-          { label: `Default (${r.default_threshold})`, metrics: r.default_threshold_metrics },
-          { label: `Selected (${r.selected_threshold})`, metrics: r.selected_threshold_metrics },
-        ])}
-        <div style="margin-top:18px"><canvas id="thresholdChart" height="100"></canvas></div>
-      </div>`;
-    const metricKeys = ['accuracy', 'sensitivity', 'specificity', 'precision', 'f1'];
-    renderBarChart('thresholdChart', metricKeys, [
-      { label: `Default (${r.default_threshold})`, data: metricKeys.map(k => r.default_threshold_metrics[k]), color: '#94a3b8' },
-      { label: `Selected (${r.selected_threshold})`, data: metricKeys.map(k => r.selected_threshold_metrics[k]), color: '#0d9488' },
-    ]);
+    renderThresholdResults(data.result, data.model_name);
   } catch (e) {
     resultsEl.innerHTML = `<div class="banner warn">${e.message}</div>`;
   }
-};
+}
+
+function renderThresholdResults(r, modelName) {
+  const resultsEl = document.getElementById('thresholdResults');
+  const optThresh = r.selected_threshold !== undefined ? r.selected_threshold : r.optimal_threshold;
+  const defMetrics = r.selected_threshold_metrics || r.default_threshold_metrics || r.default_metrics || {};
+  const optMetrics = r.selected_threshold_metrics || r.optimal_metrics || {};
+
+  resultsEl.innerHTML = `
+    <div class="banner warn">${r.warning || 'A decision threshold is not automatically a clinically calibrated probability.'}</div>
+    <div class="card">
+      <h3>Threshold comparison — ${escapeHtml(modelName)}</h3>
+      <p class="muted small">Selected on: ${r.selected_on || 'validation split'}</p>
+      ${renderMetricsTable([
+        { label: `Default (${r.default_threshold || 0.5})`, metrics: defMetrics },
+        { label: `Optimal Selected (${optThresh})`, metrics: optMetrics },
+      ])}
+      <div style="margin-top:18px"><canvas id="thresholdChart" height="100"></canvas></div>
+    </div>`;
+
+  const metricKeys = ['accuracy', 'sensitivity', 'specificity', 'precision', 'f1'];
+  renderBarChart('thresholdChart', metricKeys, [
+    { label: `Default (${r.default_threshold || 0.5})`, data: metricKeys.map(k => defMetrics[k]), color: '#94a3b8' },
+    { label: `Optimal (${optThresh})`, data: metricKeys.map(k => optMetrics[k]), color: '#0d9488' },
+  ]);
+}
+
+document.getElementById('btnThreshold').onclick = () => runThresholdAnalysis();
 
 // ---------------- STEP: Robustness ----------------
-document.getElementById('btnRobustness').onclick = async () => {
+async function autoLoadRobustness() {
   const resultsEl = document.getElementById('robustnessResults');
-  resultsEl.innerHTML = spinner('Running multi-seed robustness evaluation...');
+  if (!resultsEl || resultsEl.innerHTML.trim() !== '' || !state.sessionId) return;
+  await runRobustnessEvaluation('all');
+}
+
+async function runRobustnessEvaluation(modelChoice, seedCount) {
+  const resultsEl = document.getElementById('robustnessResults');
+  resultsEl.innerHTML = spinner('Running multi-seed robustness evaluation across seeds...');
   try {
+    const m = modelChoice || (document.getElementById('robustModel') ? document.getElementById('robustModel').value : 'all');
+    const n = seedCount || (document.getElementById('nSeeds') ? parseInt(document.getElementById('nSeeds').value) : 5);
     const data = await api('POST', '/api/robustness', {
       session_id: state.sessionId,
-      model_name: document.getElementById('robustModel').value,
-      n_seeds: parseInt(document.getElementById('nSeeds').value),
+      model_name: m,
+      n_seeds: n,
     });
     if (!data.supported) { resultsEl.innerHTML = `<div class="banner info">${data.reason}</div>`; return; }
-    const s = data.result.summary;
+    renderRobustness(data);
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="banner warn">${e.message}</div>`;
+  }
+}
+
+function renderRobustness(data) {
+  const resultsEl = document.getElementById('robustnessResults');
+  const allResults = data.robustness_results || (data.result ? { [data.model_name]: data.result } : {});
+  const modelEntries = Object.entries(allResults);
+
+  if (!modelEntries.length) {
+    resultsEl.innerHTML = `<div class="banner info">No robustness results available yet. Click "Run Robustness Analysis".</div>`;
+    return;
+  }
+
+  // 1. Comparison table across evaluated models
+  const compRows = modelEntries.map(([name, res]) => {
+    const s = res.summary || {};
+    return `
+      <tr>
+        <td><strong>${escapeHtml(name)}</strong></td>
+        <td>${res.seeds ? res.seeds.length : 5}</td>
+        <td class="num">${s.accuracy ? pct(s.accuracy.mean) + ' <span class="muted small">±' + num(s.accuracy.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.sensitivity ? pct(s.sensitivity.mean) + ' <span class="muted small">±' + num(s.sensitivity.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.specificity ? pct(s.specificity.mean) + ' <span class="muted small">±' + num(s.specificity.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.f1 ? pct(s.f1.mean) + ' <span class="muted small">±' + num(s.f1.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.roc_auc ? num(s.roc_auc.mean, 3) + ' <span class="muted small">±' + num(s.roc_auc.std, 3) + '</span>' : '—'}</td>
+      </tr>`;
+  }).join('');
+
+  // 2. Individual model stat cards
+  const cardsHtml = modelEntries.map(([name, res], idx) => {
+    const s = res.summary || {};
     const tiles = Object.entries(s).map(([k, v]) => `
       <div class="stat-tile"><div class="label">${k}</div><div class="value">${(v.mean * 100).toFixed(1)}%</div>
       <div class="muted small">std ${(v.std * 100).toFixed(1)}% · range ${(v.min * 100).toFixed(1)}–${(v.max * 100).toFixed(1)}%</div></div>`).join('');
-    resultsEl.innerHTML = `<div class="card"><h3>Robustness — ${data.model_name} (${data.result.seeds.length} seeds)</h3><div class="card-grid">${tiles}</div>
-      <div style="margin-top:18px"><canvas id="robustnessChart" height="90"></canvas></div></div>`;
-    renderBarChart('robustnessChart', Object.keys(s), [{ label: 'Mean', data: Object.values(s).map(v => v.mean), color: '#0d9488' }]);
-  } catch (e) {
-    resultsEl.innerHTML = `<div class="banner warn">${e.message}</div>`;
-  }
-};
+    return `
+      <div class="card" style="margin-top: 16px;">
+        <h3>${escapeHtml(name)} — Multi-Seed Stability (${res.seeds ? res.seeds.length : 5} seeds)</h3>
+        <div class="card-grid">${tiles}</div>
+        <div style="margin-top:16px"><canvas id="robustChart_${idx}" height="90"></canvas></div>
+      </div>`;
+  }).join('');
+
+  resultsEl.innerHTML = `
+    <div class="card">
+      <h3>Multi-Model Robustness Summary (${modelEntries.length} model${modelEntries.length > 1 ? 's' : ''})</h3>
+      <div class="table-wrap"><table>
+        <tr><th>Model</th><th>Seeds</th><th>Accuracy (mean ± std)</th><th>Sensitivity</th><th>Specificity</th><th>F1-Score</th><th>ROC-AUC</th></tr>
+        ${compRows}
+      </table></div>
+    </div>
+    ${cardsHtml}`;
+
+  modelEntries.forEach(([name, res], idx) => {
+    const s = res.summary || {};
+    setTimeout(() => {
+      renderBarChart(`robustChart_${idx}`, Object.keys(s), [{ label: `${name} Mean`, data: Object.values(s).map(v => v.mean), color: '#0d9488' }]);
+    }, 50 * idx);
+  });
+}
+
+document.getElementById('btnRobustness').onclick = () => runRobustnessEvaluation();
+const btnRobAll = document.getElementById('btnRobustnessAll');
+if (btnRobAll) btnRobAll.onclick = () => runRobustnessEvaluation('all');
 
 // ---------------- STEP: Hardware ----------------
-document.getElementById('btnHardware').onclick = async () => {
+async function autoLoadHardware() {
   const resultsEl = document.getElementById('hardwareResults');
-  resultsEl.innerHTML = spinner('Transpiling circuit against IBM-typical basis gates...');
+  if (!resultsEl || resultsEl.innerHTML.trim() !== '' || !state.sessionId) return;
+  await runHardwareReadiness();
+}
+
+async function runHardwareReadiness() {
+  const resultsEl = document.getElementById('hardwareResults');
+  resultsEl.innerHTML = spinner('Transpiling active quantum circuit against IBM-typical basis gates...');
   try {
     const data = await api('GET', `/api/hardware-readiness?session_id=${state.sessionId}`);
-    const h = data.hardware_readiness;
-    resultsEl.innerHTML = `
-      <div class="banner purple">${h.pipeline_stage}</div>
-      <div class="card">
-        <h3>Transpilation result</h3>
-        <div class="card-grid">
-          <div class="stat-tile quantum"><div class="label">Qubits</div><div class="value">${h.num_qubits}</div></div>
-          <div class="stat-tile"><div class="label">Original depth</div><div class="value">${h.original_depth}</div></div>
-          <div class="stat-tile quantum"><div class="label">Transpiled depth</div><div class="value">${h.transpiled_depth}</div></div>
-          <div class="stat-tile quantum"><div class="label">Two-qubit gates</div><div class="value">${h.transpiled_two_qubit_gate_count}</div></div>
-        </div>
-        <hr class="divider">
-        <div class="muted">Basis gates checked: ${h.basis_gates_used_for_check.join(', ')}</div>
-        <div class="muted">Transpilation: ${h.transpilation_succeeded ? '<span class="badge teal">Successful</span>' : '<span class="badge warn">Failed</span>'}</div>
-        <div class="banner info mt16">${h.note}</div>
-      </div>`;
+    renderHardwareReadiness(data.hardware_readiness);
   } catch (e) {
     resultsEl.innerHTML = `<div class="banner warn">${e.message}</div>`;
   }
-};
+}
+
+function renderHardwareReadiness(h) {
+  const resultsEl = document.getElementById('hardwareResults');
+  if (!h) {
+    resultsEl.innerHTML = `<div class="banner info">Configure a quantum circuit in Step 5 first.</div>`;
+    return;
+  }
+  const gates = h.transpiled_gate_counts || {};
+  const gatesStr = Object.entries(gates).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join(' · ');
+
+  resultsEl.innerHTML = `
+    <div class="banner purple">${h.pipeline_stage || 'Qiskit Aer simulation -> static IBM-basis transpilation check'}</div>
+    <div class="card">
+      <h3>Transpilation result (Active Circuit Architecture)</h3>
+      <div class="card-grid">
+        <div class="stat-tile quantum"><div class="label">Qubits</div><div class="value">${h.num_qubits}</div></div>
+        <div class="stat-tile"><div class="label">Original depth</div><div class="value">${h.original_depth}</div></div>
+        <div class="stat-tile quantum"><div class="label">Transpiled depth</div><div class="value">${h.transpiled_depth}</div></div>
+        <div class="stat-tile quantum"><div class="label">Two-qubit (CX) gates</div><div class="value">${h.transpiled_two_qubit_gate_count || 0}</div></div>
+      </div>
+      <hr class="divider">
+      <div><strong>Transpiled gate counts:</strong> <span class="muted">${gatesStr || '—'}</span></div>
+      <div class="muted mt8">Basis gates checked: <strong>${(h.basis_gates_used_for_check || []).join(', ')}</strong></div>
+      <div class="muted mt8">Transpilation status: ${h.transpilation_succeeded ? '<span class="badge teal">Successful</span>' : '<span class="badge warn">Failed</span>'}</div>
+      <div class="banner info mt16">${h.note || ''}</div>
+    </div>`;
+}
+
+document.getElementById('btnHardware').onclick = () => runHardwareReadiness();
 
 // ---------------- STEP: AI Research Chat & Analysis ----------------
 let chatMessages = [];
@@ -1409,9 +1571,16 @@ document.getElementById('groqModel').addEventListener('change', (e) => {
 
 // ---------------- STEP: Report ----------------
 let lastReport = null;
-document.getElementById('btnReport').onclick = async () => {
+
+async function autoLoadReport() {
   const resultsEl = document.getElementById('reportResults');
-  resultsEl.innerHTML = spinner('Assembling final report...');
+  if (!resultsEl || resultsEl.innerHTML.trim() !== '' || !state.sessionId) return;
+  await generateReport();
+}
+
+async function generateReport() {
+  const resultsEl = document.getElementById('reportResults');
+  resultsEl.innerHTML = spinner('Assembling publication-grade experiment report from active dataset...');
   try {
     const data = await api('GET', `/api/report?session_id=${state.sessionId}`);
     lastReport = data.report;
@@ -1419,51 +1588,203 @@ document.getElementById('btnReport').onclick = async () => {
   } catch (e) {
     resultsEl.innerHTML = `<div class="banner warn">${e.message}</div>`;
   }
-};
+}
+
+document.getElementById('btnReport').onclick = generateReport;
+
 document.getElementById('btnExportReport').onclick = () => {
   if (!lastReport) return;
   const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'qremed_report.json'; a.click();
+  a.href = URL.createObjectURL(blob);
+  a.download = `qremed_report_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
+
+const btnExportMd = document.getElementById('btnExportReportMd');
+if (btnExportMd) {
+  btnExportMd.onclick = () => {
+    if (!lastReport) {
+      alert('Generate the report first.');
+      return;
+    }
+    const r = lastReport;
+    let md = `# Q-REMED Research Report: ${r.dataset ? r.dataset.name || 'Experiment Run' : 'Experiment'}\n\n`;
+    md += `**Target Column:** ${r.dataset ? r.dataset.target_column || '—' : '—'}  \n`;
+    md += `**Generated On:** ${new Date().toLocaleString()}  \n`;
+    md += `**Session ID:** ${state.sessionId || '—'}  \n\n---\n\n`;
+
+    md += `## 1. Dataset & Preprocessing\n`;
+    if (r.preprocessing) {
+      md += `- Split: ${r.preprocessing.n_train} train / ${r.preprocessing.n_test} test\n`;
+      md += `- Positive Class: ${r.preprocessing.positive_class_name} | Negative Class: ${r.preprocessing.negative_class_name}\n`;
+      md += `- Imputation: ${r.preprocessing.imputation}\n`;
+      md += `- Scaling: ${r.preprocessing.scaling}\n\n`;
+    }
+
+    md += `## 2. Feature Selection\n`;
+    const selFeatures = (r.feature_selection && r.feature_selection.selected_features) || [];
+    md += `- Selected features (${selFeatures.length}): ${selFeatures.join(', ')}\n`;
+    if (r.feature_selection && r.feature_selection.feature_count_evaluation) {
+      md += `- Rationale: ${r.feature_selection.feature_count_evaluation.reason}\n\n`;
+    }
+
+    md += `## 3. Quantum Circuit & Hardware Readiness\n`;
+    if (r.hardware_readiness) {
+      const hw = r.hardware_readiness;
+      md += `- Qubits: ${hw.num_qubits}\n`;
+      md += `- Original Depth: ${hw.original_depth}\n`;
+      md += `- Transpiled Depth: ${hw.transpiled_depth}\n`;
+      md += `- Two-Qubit (CX) Gates: ${hw.transpiled_two_qubit_gate_count || 0}\n`;
+      md += `- Transpilation Status: ${hw.transpilation_succeeded ? 'Successful' : 'Failed'}\n\n`;
+    }
+
+    md += `## 4. Model Comparison\n\n`;
+    md += `| Model | Type | Accuracy | Sensitivity | Specificity | F1-Score | ROC-AUC |\n`;
+    md += `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+    if (r.model_results) {
+      Object.entries(r.model_results).forEach(([name, m]) => {
+        const met = m.metrics || {};
+        md += `| ${name} | ${m.type || 'classical'} | ${pct(met.accuracy)} | ${pct(met.sensitivity)} | ${pct(met.specificity)} | ${pct(met.f1)} | ${met.roc_auc ? num(met.roc_auc, 3) : '—'} |\n`;
+      });
+    }
+    md += `\n`;
+    if (r.comparison) {
+      md += `**Verdict:** ${r.comparison.verdict}\n\n`;
+    }
+
+    md += `## 5. Multi-Seed Robustness\n\n`;
+    if (r.robustness && Object.keys(r.robustness).length) {
+      md += `| Model | Seeds | Accuracy | Sensitivity | Specificity | F1 | ROC-AUC |\n`;
+      md += `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+      Object.entries(r.robustness).forEach(([name, res]) => {
+        const s = res.summary || {};
+        md += `| ${name} | ${res.seeds ? res.seeds.length : 5} | ${s.accuracy ? pct(s.accuracy.mean) + ' ±' + num(s.accuracy.std, 3) : '—'} | ${s.sensitivity ? pct(s.sensitivity.mean) : '—'} | ${s.specificity ? pct(s.specificity.mean) : '—'} | ${s.f1 ? pct(s.f1.mean) : '—'} | ${s.roc_auc ? num(s.roc_auc.mean, 3) : '—'} |\n`;
+      });
+      md += `\n`;
+    }
+
+    if (r.ai_assisted_analysis && r.ai_assisted_analysis.available) {
+      md += `## 6. AI-Assisted Research Analysis (${r.ai_assisted_analysis.model || 'Groq'})\n\n`;
+      md += `${r.ai_assisted_analysis.analysis}\n\n`;
+    }
+
+    md += `## 7. Limitations\n\n`;
+    (r.limitations || []).forEach(l => { md += `- ${l}\n`; });
+
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `qremed_report_${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+}
 
 function renderReport(r) {
   const resultsEl = document.getElementById('reportResults');
-  const modelRows = r.model_results ? Object.entries(r.model_results).map(([name, m]) => ({ label: name, metrics: m.metrics })) : [];
+  const modelRows = r.model_results ? Object.entries(r.model_results).map(([name, m]) => ({
+    label: name,
+    metrics: m.metrics,
+    device: m.device || (m.type === 'quantum' ? 'CPU Simulator' : 'CPU'),
+    accelerator: m.accelerator || 'CPU',
+  })) : [];
+
+  // Robustness rows
+  let robHtml = '<div class="muted">Robustness evaluation not executed.</div>';
+  if (r.robustness && Object.keys(r.robustness).length) {
+    const rRows = Object.entries(r.robustness).map(([name, res]) => {
+      const s = res.summary || {};
+      return `<tr>
+        <td><strong>${escapeHtml(name)}</strong></td>
+        <td>${res.seeds ? res.seeds.length : 5}</td>
+        <td class="num">${s.accuracy ? pct(s.accuracy.mean) + ' <span class="muted small">±' + num(s.accuracy.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.sensitivity ? pct(s.sensitivity.mean) + ' <span class="muted small">±' + num(s.sensitivity.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.specificity ? pct(s.specificity.mean) + ' <span class="muted small">±' + num(s.specificity.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.f1 ? pct(s.f1.mean) + ' <span class="muted small">±' + num(s.f1.std, 3) + '</span>' : '—'}</td>
+        <td class="num">${s.roc_auc ? num(s.roc_auc.mean, 3) + ' <span class="muted small">±' + num(s.roc_auc.std, 3) + '</span>' : '—'}</td>
+      </tr>`;
+    }).join('');
+    robHtml = `<div class="table-wrap"><table>
+      <tr><th>Model</th><th>Seeds</th><th>Accuracy (mean ± std)</th><th>Sensitivity</th><th>Specificity</th><th>F1-Score</th><th>ROC-AUC</th></tr>
+      ${rRows}
+    </table></div>`;
+  }
+
+  // Threshold cards
+  let thHtml = '<div class="muted">Decision threshold tuning not executed.</div>';
+  if (r.threshold_analysis && Object.keys(r.threshold_analysis).length) {
+    thHtml = Object.entries(r.threshold_analysis).map(([name, res]) => {
+      const opt = res.selected_threshold !== undefined ? res.selected_threshold : res.optimal_threshold;
+      const defM = res.selected_threshold_metrics || res.default_threshold_metrics || res.default_metrics || {};
+      const optM = res.selected_threshold_metrics || res.optimal_metrics || {};
+      return `
+        <div class="card" style="margin-top:8px; border: 1px solid #e2e8f0;">
+          <strong>${escapeHtml(name)}</strong> (Optimal threshold: <strong>${opt}</strong> · ${res.objective || 'maximize_f1'})
+          <div class="card-grid" style="margin-top:8px;">
+            <div class="stat-tile"><div class="label">Default (0.50) Sensitivity</div><div class="value">${pct(defM.sensitivity)}</div></div>
+            <div class="stat-tile"><div class="label">Optimal Sensitivity</div><div class="value">${pct(optM.sensitivity)}</div></div>
+            <div class="stat-tile"><div class="label">Optimal Specificity</div><div class="value">${pct(optM.specificity)}</div></div>
+            <div class="stat-tile"><div class="label">Optimal F1</div><div class="value">${pct(optM.f1)}</div></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Hardware cards
+  let hwHtml = '<div class="muted">Hardware readiness transpilation check not run.</div>';
+  if (r.hardware_readiness) {
+    const hw = r.hardware_readiness;
+    hwHtml = `
+      <div class="card-grid">
+        <div class="stat-tile quantum"><div class="label">Qubits</div><div class="value">${hw.num_qubits}</div></div>
+        <div class="stat-tile"><div class="label">Original depth</div><div class="value">${hw.original_depth}</div></div>
+        <div class="stat-tile quantum"><div class="label">Transpiled depth</div><div class="value">${hw.transpiled_depth}</div></div>
+        <div class="stat-tile quantum"><div class="label">Two-qubit (CX) gates</div><div class="value">${hw.transpiled_two_qubit_gate_count || 0}</div></div>
+      </div>
+      <div class="muted mt8">Basis gates: ${(hw.basis_gates_used_for_check || []).join(', ')} · Status: ${hw.transpilation_succeeded ? '<span class="badge teal">Successful</span>' : '<span class="badge warn">Failed</span>'}</div>`;
+  }
+
+  // AI summary
+  let aiHtml = '<div class="muted">AI analysis not generated. Use Step 11 to produce a scientific analysis via Groq.</div>';
+  if (r.ai_assisted_analysis && r.ai_assisted_analysis.available) {
+    aiHtml = `
+      <div class="banner purple" style="margin-bottom:10px;">Model: ${r.ai_assisted_analysis.model || 'Groq'}</div>
+      <div style="background:#f8fafc; padding:16px; border-radius:8px; border:1px solid #e2e8f0;">
+        ${formatMarkdown(r.ai_assisted_analysis.analysis || '')}
+      </div>`;
+  }
+
   resultsEl.innerHTML = `
     <div class="card report-section">
-      <h4>Dataset</h4>
-      <div>${r.dataset.name} — target: <strong>${r.dataset.target_column || '—'}</strong></div>
+      <h3>1. Dataset & Preprocessing</h3>
+      <div>Dataset: <strong>${escapeHtml(r.dataset.name || 'Active Dataset')}</strong> · Target: <strong>${escapeHtml(r.dataset.target_column || '—')}</strong></div>
+      <div class="muted mt8">${r.preprocessing ? r.preprocessing.message + ' · ' + r.preprocessing.n_train + ' train / ' + r.preprocessing.n_test + ' test samples' : 'Not run'}</div>
 
-      <h4>Preprocessing</h4>
-      <div class="muted">${r.preprocessing ? r.preprocessing.message + ' · ' + r.preprocessing.n_train + ' train / ' + r.preprocessing.n_test + ' test' : 'Not run'}</div>
+      <h3 class="mt16">2. Feature Selection</h3>
+      <div class="muted">Selected features (${(r.feature_selection.selected_features || []).length}): <strong>${(r.feature_selection.selected_features || []).join(', ')}</strong></div>
+      ${r.feature_selection.feature_count_evaluation ? `<div class="muted mt8">${r.feature_selection.feature_count_evaluation.reason}</div>` : ''}
 
-      <h4>Feature Selection</h4>
-      <div class="muted">Selected: ${r.feature_selection.selected_features ? r.feature_selection.selected_features.join(', ') : '—'}</div>
+      <h3 class="mt16">3. Quantum Configuration & Hardware Compatibility</h3>
+      ${hwHtml}
 
-      <h4>Quantum Configuration</h4>
-      <div class="muted">${r.quantum_configuration ? JSON.stringify(r.quantum_configuration) : 'Not configured'}</div>
-
-      <h4>Model Results</h4>
+      <h3 class="mt16">4. Model Performance & Comparison</h3>
       ${modelRows.length ? renderMetricsTable(modelRows) : '<div class="muted">No models run yet</div>'}
+      ${r.comparison ? `<div class="verdict-box classical mt16">${escapeHtml(r.comparison.verdict)}</div>` : ''}
 
-      <h4>Comparison Verdict</h4>
-      <div class="muted">${r.comparison ? r.comparison.verdict : '—'}</div>
+      <h3 class="mt16">5. Multi-Seed Robustness Analysis</h3>
+      ${robHtml}
 
-      <h4>Threshold Analysis</h4>
-      <div class="muted">${r.threshold_analysis ? Object.keys(r.threshold_analysis).join(', ') + ' analyzed' : 'Not run'}</div>
+      <h3 class="mt16">6. Decision Threshold Optimization</h3>
+      ${thHtml}
 
-      <h4>Robustness</h4>
-      <div class="muted">${r.robustness ? Object.keys(r.robustness).join(', ') + ' analyzed' : 'Not run'}</div>
+      <h3 class="mt16">7. AI-Assisted Research Insights</h3>
+      ${aiHtml}
 
-      <h4>Hardware Readiness</h4>
-      <div class="muted">${r.hardware_readiness ? `${r.hardware_readiness.num_qubits} qubits, depth ${r.hardware_readiness.transpiled_depth} after transpilation` : 'Not checked'}</div>
-
-      <h4>AI-Assisted Analysis & Chat</h4>
-      <div class="muted">${r.ai_assisted_analysis && r.ai_assisted_analysis.available ? `Generated (${r.ai_assisted_analysis.model || 'Groq'})` + (r.ai_chat_history && r.ai_chat_history.length > 1 ? ` · ${r.ai_chat_history.length} chat messages recorded` : '') : 'Not generated'}</div>
-
-      <h4>Limitations</h4>
-      <ul>${r.limitations.map(l => `<li class="muted">${l}</li>`).join('')}</ul>
+      <h3 class="mt16">8. Methodological Limitations</h3>
+      <ul>${(r.limitations || []).map(l => `<li class="muted">${escapeHtml(l)}</li>`).join('')}</ul>
     </div>`;
 }
 

@@ -1,5 +1,5 @@
 """
-Q-REMED backend -- FastAPI service wiring the generalized engine modules
+Q-REMED backend (v2.1 dynamic) -- FastAPI service wiring the generalized engine modules
 into the API surface described in the Q-REMED product spec.
 
 Run locally:
@@ -488,10 +488,10 @@ class ThresholdRequest(BaseModel):
 def _classical_model_factory(model_name: str, seed: int):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.linear_model import LogisticRegression
-    if model_name == "Logistic Regression":
+    if "Logistic" in model_name:
         return lambda: LogisticRegression(max_iter=1000, random_state=seed)
-    if model_name == "Random Forest":
-        return lambda: RandomForestClassifier(n_estimators=200, n_jobs=-1, random_state=seed)
+    if "Random Forest" in model_name:
+        return lambda: RandomForestClassifier(n_estimators=200, n_jobs=1, random_state=seed)
     if "XGBoost" in model_name:
         import xgboost as xgb
         from .engine.device_detection import detect_gpu
@@ -539,8 +539,22 @@ def run_threshold(req: ThresholdRequest):
         factory_builder, X_train_sel, prep["y_train"], X_test_sel, prep["y_test"],
         obj, pos, neg, random_state=seed,
     )
+    result["optimal_threshold"] = result["selected_threshold"]
+    result["optimal_metrics"] = result["selected_threshold_metrics"]
+    result["default_metrics"] = result["default_threshold_metrics"]
     session.setdefault("threshold_results", {})[req.model_name] = result
-    return ok({"session_id": req.session_id, "supported": True, "model_name": req.model_name, "result": result})
+    return ok({"session_id": req.session_id, "supported": True, "model_name": req.model_name, "result": result, "threshold_results": session["threshold_results"]})
+
+
+@app.get("/api/threshold")
+def get_threshold(session_id: str):
+    session = get_session(session_id)
+    results = session.get("threshold_results", {})
+    if not results and session.get("model_results") and session.get("prep") and session.get("selected_features"):
+        best_model = session.get("comparison", {}).get("best_classical_model") or "Random Forest"
+        req = ThresholdRequest(session_id=session_id, model_name=best_model, objective="maximize_f1")
+        return run_threshold(req)
+    return ok({"session_id": session_id, "supported": True, "threshold_results": results})
 
 
 # --------------------------------------------------------------------------
@@ -562,36 +576,71 @@ def run_robustness(req: RobustnessRequest):
     base_seed_cfg = session["config"]
     positive_class = session.get("positive_class")
 
-    factory_builder = _classical_model_factory(req.model_name, base_seed_cfg["random_state"])
-    if factory_builder is None:
-        return ok({"session_id": req.session_id, "supported": False,
-                   "reason": "Robustness analysis in this build re-runs the full split->train->evaluate "
-                              "pipeline per seed, which is only done for classical models "
-                              "('Logistic Regression', 'Random Forest') by default -- quantum robustness "
-                              "runs are computationally expensive (each seed retrains a VQC/kernel from scratch)."})
-
     n_seeds = max(2, min(req.n_seeds, 10))
     seeds = list(range(n_seeds))
-
     binarize_strategy = session.get("binarize_strategy")
     binarize_threshold = session.get("binarize_threshold")
 
-    def run_fn(seed):
-        prep = preprocessing.leakage_safe_preprocess(
-            df, target_column, base_seed_cfg["test_size"], seed,
-            positive_class=positive_class,
-            binarize_strategy=binarize_strategy,
-            binarize_threshold=binarize_threshold,
-        )
-        pos, neg = prep["info"]["positive_label"], prep["info"]["negative_label"]
-        model = factory_builder()
-        model.fit(prep["X_train"][features], prep["y_train"])
-        ev = evaluation.evaluate_sklearn_model(model, prep["X_test"][features], prep["y_test"], pos, neg)
-        return ev["metrics"]
+    # Determine which model(s) to evaluate
+    if req.model_name.lower() == "all":
+        models_to_run = []
+        for m_name, m_val in session.get("model_results", {}).items():
+            if m_val.get("type") == "classical" and _classical_model_factory(m_name, base_seed_cfg["random_state"]) is not None:
+                models_to_run.append(m_name)
+        if not models_to_run:
+            models_to_run = ["Random Forest", "Logistic Regression"]
+    else:
+        models_to_run = [req.model_name]
 
-    result = robustness_mod.run_robustness_analysis(run_fn, seeds=seeds)
-    session.setdefault("robustness_results", {})[req.model_name] = result
-    return ok({"session_id": req.session_id, "supported": True, "model_name": req.model_name, "result": result})
+    evaluated_results = {}
+    for m_name in models_to_run:
+        factory_builder = _classical_model_factory(m_name, base_seed_cfg["random_state"])
+        if factory_builder is None:
+            continue
+
+        def make_run_fn(builder):
+            def run_fn(seed):
+                prep = preprocessing.leakage_safe_preprocess(
+                    df, target_column, base_seed_cfg["test_size"], seed,
+                    positive_class=positive_class,
+                    binarize_strategy=binarize_strategy,
+                    binarize_threshold=binarize_threshold,
+                )
+                pos, neg = prep["info"]["positive_label"], prep["info"]["negative_label"]
+                model = builder()
+                model.fit(prep["X_train"][features], prep["y_train"])
+                ev = evaluation.evaluate_sklearn_model(model, prep["X_test"][features], prep["y_test"], pos, neg)
+                return ev["metrics"]
+            return run_fn
+
+        res = robustness_mod.run_robustness_analysis(make_run_fn(factory_builder), seeds=seeds)
+        session.setdefault("robustness_results", {})[m_name] = res
+        evaluated_results[m_name] = res
+
+    if not evaluated_results:
+        return ok({"session_id": req.session_id, "supported": False,
+                   "reason": "Robustness analysis in this build re-runs the full split->train->evaluate "
+                              "pipeline per seed for classical models ('Logistic Regression', 'Random Forest', 'XGBoost'). "
+                              "Quantum robustness runs are computationally expensive and not run automatically."})
+
+    primary_res = evaluated_results.get(req.model_name) or list(evaluated_results.values())[0]
+    return ok({
+        "session_id": req.session_id,
+        "supported": True,
+        "model_name": req.model_name,
+        "result": primary_res,
+        "robustness_results": session.get("robustness_results", {}),
+    })
+
+
+@app.get("/api/robustness")
+def get_robustness(session_id: str):
+    session = get_session(session_id)
+    rob = session.get("robustness_results", {})
+    if not rob and session.get("model_results") and session.get("df") is not None and session.get("selected_features"):
+        req = RobustnessRequest(session_id=session_id, model_name="all", n_seeds=5)
+        return run_robustness(req)
+    return ok({"session_id": session_id, "supported": True, "robustness_results": rob})
 
 
 # --------------------------------------------------------------------------
@@ -601,6 +650,8 @@ def run_robustness(req: RobustnessRequest):
 @app.get("/api/hardware-readiness")
 def hardware_readiness(session_id: str):
     session = get_session(session_id)
+    if "hardware_readiness" in session and session["hardware_readiness"]:
+        return ok({"session_id": session_id, "hardware_readiness": session["hardware_readiness"]})
     q = require(session, "quantum", "Call /api/quantum/configure first.")
     result = hardware_compatibility.check_hardware_compatibility(q["full_circuit"])
     session["hardware_readiness"] = result
@@ -618,14 +669,43 @@ class AIAnalysisRequest(BaseModel):
 
 
 def _structured_results_for_ai(session: dict) -> dict:
-    if not session.get("model_results"):
-        # Auto-enrich from pre-trained benchmark so AI always has full measured results
+    dataset_name = session.get("dataset_name") or ""
+    is_wdbc_benchmark = "Wisconsin" in dataset_name or "WDBC" in dataset_name
+
+    # Only enrich from pre-trained benchmark if the session explicitly loaded the WDBC reference benchmark
+    if not session.get("model_results") and is_wdbc_benchmark:
         _, pre = preexisting_data.load_pretrained_benchmark_session()
         for k in ["prep", "anova_ranking", "rf_ranking", "count_evaluation", "selected_features",
                   "selected_n_features", "quantum", "model_results", "quantum_notes", "comparison",
                   "threshold_results", "robustness_results", "hardware_readiness"]:
             if k not in session or not session[k]:
                 session[k] = pre[k]
+
+    # Dynamic on-the-fly resolution for any missing evaluation components on the active dataset:
+    if not session.get("hardware_readiness") and session.get("quantum", {}).get("full_circuit"):
+        try:
+            session["hardware_readiness"] = hardware_compatibility.check_hardware_compatibility(session["quantum"]["full_circuit"])
+        except Exception as e:
+            print(f"Hardware readiness auto-check skipped: {e}")
+
+    sid = session.get("_session_id") or ""
+    if not session.get("robustness_results") and session.get("model_results") and session.get("df") is not None and session.get("selected_features"):
+        try:
+            req_rob = RobustnessRequest(session_id=sid, model_name="all", n_seeds=5)
+            res_rob = run_robustness(req_rob)
+            if res_rob.get("status") == "ok" and res_rob.get("robustness_results"):
+                session["robustness_results"] = res_rob["robustness_results"]
+        except Exception as e:
+            print(f"Robustness auto-analysis skipped: {e}")
+
+    if not session.get("threshold_results") and session.get("model_results") and session.get("prep") is not None and session.get("selected_features"):
+        try:
+            best_model = session.get("comparison", {}).get("best_classical_model") or "Random Forest"
+            res_th = run_threshold(ThresholdRequest(session_id=sid, model_name=best_model, objective="maximize_f1"))
+            if res_th.get("status") == "ok" and res_th.get("result"):
+                session.setdefault("threshold_results", {})[best_model] = res_th["result"]
+        except Exception as e:
+            print(f"Threshold auto-analysis skipped: {e}")
 
     prep_info = session.get("prep", {}).get("info")
     return {
@@ -702,6 +782,8 @@ def ai_chat(req: AIChatRequest):
 @app.get("/api/report")
 def get_report(session_id: str):
     session = get_session(session_id)
+    session["_session_id"] = session.get("_session_id") or session_id
+    structured = _structured_results_for_ai(session)
     report = {
         "dataset": {"name": session.get("dataset_name"), "target_column": session.get("target_column")},
         "preprocessing": session.get("prep", {}).get("info"),
@@ -720,7 +802,7 @@ def get_report(session_id: str):
         "hardware_readiness": session.get("hardware_readiness"),
         "ai_assisted_analysis": session.get("ai_analysis"),
         "ai_chat_history": session.get("chat_history", []),
-        "limitations": _structured_results_for_ai(session)["limitations"],
+        "limitations": structured["limitations"],
     }
     return ok({"session_id": session_id, "report": report})
 

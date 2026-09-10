@@ -255,7 +255,10 @@
           </div>
           <div class="field"><label>Number of seeds</label><input type="number" id="nSeeds" value="5" min="2" max="10"></div>
         </div>
-        <div class="btn-row"><button class="btn" id="btnRobustness">Run Robustness Analysis</button></div>
+        <div class="btn-row">
+          <button class="btn" id="btnRobustness">Run Robustness Analysis</button>
+          <button class="btn secondary" id="btnRobustnessAll">Run for All Models</button>
+        </div>
       </div>
       <div id="robustnessResults"></div>
     </section>
@@ -360,6 +363,7 @@
         <div class="btn-row">
           <button class="btn" id="btnReport">Generate Report</button>
           <button class="btn secondary" id="btnExportReport">Export as JSON</button>
+          <button class="btn secondary" id="btnExportReportMd">Export as Markdown</button>
         </div>
       </div>
       <div id="reportResults"></div>
