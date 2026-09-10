@@ -498,12 +498,47 @@ def _structured_results_for_ai(session: dict) -> dict:
     }
 
 
+class AIChatRequest(BaseModel):
+    session_id: str
+    message: str
+    history: Optional[list[dict]] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+
+
 @app.post("/api/ai-analysis")
 def ai_analysis(req: AIAnalysisRequest):
     session = get_session(req.session_id)
     structured = _structured_results_for_ai(session)
     result = groq_analysis.run_ai_analysis(structured, api_key=req.api_key)
     session["ai_analysis"] = result
+    if result.get("available") and "analysis" in result:
+        session["chat_history"] = [
+            {"role": "assistant", "content": result["analysis"]}
+        ]
+        result["history"] = session["chat_history"]
+    return ok({"session_id": req.session_id, **result})
+
+
+@app.post("/api/ai-chat")
+def ai_chat(req: AIChatRequest):
+    session = get_session(req.session_id)
+    structured = _structured_results_for_ai(session)
+    session_history = session.setdefault("chat_history", [])
+
+    messages_to_send = list(req.history) if req.history is not None else list(session_history)
+    messages_to_send.append({"role": "user", "content": req.message})
+
+    result = groq_analysis.run_ai_chat(
+        structured,
+        messages=messages_to_send,
+        api_key=req.api_key,
+        model=req.model,
+    )
+    if result.get("available") and "message" in result:
+        session_history.append({"role": "user", "content": req.message})
+        session_history.append(result["message"])
+        result["history"] = session_history
     return ok({"session_id": req.session_id, **result})
 
 
@@ -531,6 +566,7 @@ def get_report(session_id: str):
         "robustness": session.get("robustness_results"),
         "hardware_readiness": session.get("hardware_readiness"),
         "ai_assisted_analysis": session.get("ai_analysis"),
+        "ai_chat_history": session.get("chat_history", []),
         "limitations": _structured_results_for_ai(session)["limitations"],
     }
     return ok({"session_id": session_id, "report": report})
